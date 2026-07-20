@@ -832,7 +832,7 @@ function finishOpt(o,resbox){
   cont.appendChild(containChart(b.grades,b.x));resbox.appendChild(cont);
   const apply=elh("button",{class:"primary"},"↙ 이 설계를 대시보드에 반영");
   apply.onclick=()=>{S.grades=b.grades.slice();S.x=b.x;S.tab="dash";render();};resbox.appendChild(apply);
-  const sav=elh("button",{class:"ghost"},"💾 시나리오로 저장");
+  const sav=elh("button",{class:"ghost"},"💾 이벤트 저장");
   sav.onclick=()=>{S.grades=b.grades.slice();S.x=b.x;saveEvent();};resbox.appendChild(sav);
 }
 function convChart(conv){
