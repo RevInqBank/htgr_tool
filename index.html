@@ -656,7 +656,7 @@ function srWorthChart(r){
     const benefit=(G[g].freq-G.SR.freq)*c[2]*day;
     return {name:c[0],cost:Math.max(0,cost),benefit:Math.max(0,benefit),g};
   }).filter(t=>t.g!=="SR").sort((a,b)=>b.cost-a.cost);
-  const W=560,H=Math.max(220,items.length*26+50),m={l:110,r:120,t:10,b:26};const s=svg(W,H);
+  const W=560,H=Math.max(228,items.length*26+58),m={l:110,r:120,t:10,b:34};const s=svg(W,H);
   const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
   const maxV=Math.max(...items.map(t=>Math.max(t.cost,t.benefit)),1);
   const X=v=>linmap(v,0,maxV,x0,x1);const rh=(y0-y1)/items.length;
@@ -687,7 +687,7 @@ function lcohBar(r){
   return s;
 }
 function npvChart(r){
-  const W=560,H=260,m={l:60,r:16,t:16,b:34};const s=svg(W,H);
+  const W=560,H=268,m={l:60,r:16,t:16,b:42};const s=svg(W,H);
   const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const NY=r.flows.length;
   const cums=r.flows.map(f=>f[2]);const cmin=Math.min(0,...cums),cmax=Math.max(...cums);
   const X=v=>linmap(v,0,NY,x0,x1),Y=v=>linmap(v,cmin,cmax,y0,y1);const zero=Y(0);
@@ -700,7 +700,7 @@ function npvChart(r){
   els("path",{d:"M"+r.flows.map(f=>X(f[0]).toFixed(1)+","+Y(f[2]).toFixed(1)).join("L"),fill:"none",stroke:"var(--ink)","stroke-width":2},s);
   if(r.payback){els("circle",{cx:X(r.payback),cy:zero,r:5,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2},s);
     els("text",{x:X(r.payback)+7,y:zero-7,class:"dlabel"},s).textContent="회수 "+r.payback+"년";}
-  axTitle(s,(x0+x1)/2,H,"사업연도 (막대=순현금흐름 ±, 선=누적, 단위 백만원)");
+  axTitle(s,(x0+x1)/2,H,"사업연도 (막대=순현금, 선=누적, 백만원)");
   return s;
 }
 function finTable(r){
@@ -1037,7 +1037,7 @@ function scenStackLCOH(rows){
 }
 // 시나리오 IRR 점+선
 function scenLine(rows,get,label,opt){
-  opt=opt||{};const W=680,H=200,m={l:52,r:16,t:16,b:58};const s=svg(W,H);
+  opt=opt||{};const W=680,H=204,m={l:52,r:16,t:16,b:62};const s=svg(W,H);
   const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const vals=rows.map(get);
   const lo=Math.min(opt.thresh!=null?opt.thresh:Infinity,...vals),hi=Math.max(opt.thresh!=null?opt.thresh:-Infinity,...vals);
   const pad=(hi-lo)*0.15||1;const Y=v=>linmap(v,lo-pad,hi+pad,y0,y1);
