@@ -1,0 +1,859 @@
+<title>HTGR 본선 — 최적설계 인터랙티브 툴</title>
+<style>
+:root{color-scheme:light;
+ --page:#f4f5f3;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;
+ --grid:#e6e6df;--axis:#c3c2b7;--ring:rgba(11,11,11,.09);--hover:rgba(11,11,11,.04);
+ --g-NST:#86b6ef;--g-NSRST:#3987e5;--g-SR:#184f95;
+ --pass:#0ca30c;--fail:#d03b3b;--c-con:#4a3aa7;--c-om:#1baf7a;--c-fp:#eb6834;
+ --opt:#5b5f66;--cf-pos:#2a78d6;--cf-neg:#e34948;--accent:#184f95;}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+ --page:#0d0d0d;--surface:#191919;--ink:#f4f4f0;--ink2:#c3c2b7;--muted:#8f8d86;
+ --grid:#2a2a28;--axis:#3a3a37;--ring:rgba(255,255,255,.11);--hover:rgba(255,255,255,.05);
+ --g-NST:#5598e7;--g-NSRST:#3987e5;--g-SR:#5a8fd6;
+ --c-con:#6a5ac7;--c-om:#22c98d;--c-fp:#d95926;--opt:#b0b0a8;--cf-pos:#3987e5;--cf-neg:#e66767;--accent:#5a8fd6;}}
+:root[data-theme="dark"]{
+ --page:#0d0d0d;--surface:#191919;--ink:#f4f4f0;--ink2:#c3c2b7;--muted:#8f8d86;
+ --grid:#2a2a28;--axis:#3a3a37;--ring:rgba(255,255,255,.11);--hover:rgba(255,255,255,.05);
+ --g-NST:#5598e7;--g-NSRST:#3987e5;--g-SR:#5a8fd6;
+ --c-con:#6a5ac7;--c-om:#22c98d;--c-fp:#d95926;--opt:#b0b0a8;--cf-pos:#3987e5;--cf-neg:#e66767;--accent:#5a8fd6;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased}
+.top{position:sticky;top:0;z-index:10;background:var(--surface);border-bottom:1px solid var(--ring);padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top h1{font-size:15px;margin:0;letter-spacing:-.01em;white-space:nowrap}
+#nav{display:flex;gap:4px;flex-wrap:wrap}
+.tabbtn{background:none;border:1px solid transparent;color:var(--ink2);padding:6px 13px;border-radius:8px;font-size:13.5px;cursor:pointer;font-family:inherit}
+.tabbtn:hover{background:var(--hover)}
+.tabbtn.active{background:var(--accent);color:#fff;font-weight:600}
+.themebtn{margin-left:auto;background:none;border:1px solid var(--ring);color:var(--ink2);border-radius:20px;padding:5px 11px;font-size:12px;cursor:pointer}
+#panel{max-width:1080px;margin:0 auto;padding:18px 16px 70px;display:flex;flex-direction:column;gap:16px}
+.panelcard{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:16px}
+.cardh{font-size:13px;font-weight:650;letter-spacing:.01em;margin-bottom:10px}
+.dashgrid{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start}
+@media(max-width:800px){.dashgrid{grid-template-columns:1fr}}
+.syslabel{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 0 5px}
+.crow{display:flex;align-items:center;gap:8px;margin:5px 0}
+.cname{flex:1;font-size:12.5px}
+.seg{display:inline-flex;border:1px solid var(--ring);border-radius:7px;overflow:hidden}
+.segb{border:none;background:var(--surface);color:var(--muted);padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;border-right:1px solid var(--ring)}
+.segb:last-child{border-right:none}
+.segb.on.g-NST{background:var(--g-NST);color:#08233f}
+.segb.on.g-NSRST{background:var(--g-NSRST);color:#fff}
+.segb.on.g-SR{background:var(--g-SR);color:#fff}
+.lockb{border:1px solid var(--ring);background:var(--surface);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:12px}
+.lockb.on{background:var(--accent);border-color:var(--accent)}
+.slider{width:100%}
+.slwrap{display:flex;align-items:center;gap:10px;margin-top:4px}
+.slval{font-variant-numeric:tabular-nums;font-weight:600;min-width:52px}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.primary{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.ghost{background:none;border:1px solid var(--ring);color:var(--ink2);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+.tgl{background:var(--surface);border:1px solid var(--ring);color:var(--ink2);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+.tgl.on{background:var(--c-fp);border-color:var(--c-fp);color:#fff;font-weight:600}
+.kpirow{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.kpi{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:10px 13px}
+.kpi.good{border-color:color-mix(in srgb,var(--pass) 55%,var(--ring))}
+.kpi.bad{border-color:color-mix(in srgb,var(--fail) 55%,var(--ring))}
+.kv{font-size:22px;font-weight:650;letter-spacing:-.01em}
+.kl{font-size:11px;color:var(--muted);margin-top:1px}
+.ks{font-size:11px;color:var(--ink2);margin-top:2px}
+.kpi.good .ks{color:var(--pass)}.kpi.bad .ks{color:var(--fail)}
+svg{display:block}
+.gl{stroke:var(--grid);stroke-width:1}.baseline{stroke:var(--axis);stroke-width:1}
+.ax{fill:var(--muted);font-size:10.5px}.axl{fill:var(--ink2);font-size:11px;font-weight:500}
+.dlabel{fill:var(--ink);font-size:11px;font-weight:600}
+.flow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin-top:4px}
+.fnode{background:var(--page);border:1px solid var(--ring);border-radius:9px;padding:9px 11px;font-size:12px;flex:1;min-width:120px}
+.fnode b{display:block;font-size:11.5px;margin-bottom:2px}
+.farrow{display:flex;align-items:center;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin:6px 0}
+.tblwrap{overflow-x:auto}
+.dt{width:100%;border-collapse:collapse;font-size:12.5px}
+.dt th{text-align:left;color:var(--muted);font-weight:600;padding:5px 8px;border-bottom:1px solid var(--ring);white-space:nowrap}
+.dt td{padding:5px 8px;border-bottom:1px solid var(--ring)}
+.dt td.num{text-align:right;font-variant-numeric:tabular-nums}
+.dt tr.tot td,.dt tr.tot{font-weight:650}
+.dt h4{margin:14px 0 6px}
+details summary{cursor:pointer;font-size:13px;font-weight:600}
+details[open] summary{margin-bottom:10px}
+.orow{display:flex;align-items:center;gap:10px;margin:7px 0}
+.orow label{flex:1;font-size:13px}
+.orow input{width:120px;padding:5px 8px;border:1px solid var(--ring);border-radius:6px;background:var(--surface);color:var(--ink);font-family:inherit}
+.unit{font-size:11.5px;color:var(--muted);min-width:80px}
+.mini{border:1px solid var(--ring);background:var(--surface);color:var(--ink2);border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;font-family:inherit}
+h4{font-size:13px}
+.pbanner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 15px;border-radius:10px;font-size:13px}
+.pbanner.on{background:color-mix(in srgb,var(--c-fp) 13%,var(--surface));border:1px solid color-mix(in srgb,var(--c-fp) 45%,var(--ring))}
+.pbanner.off{background:var(--surface);border:1px solid var(--ring);color:var(--ink2)}
+.pbanner .tgl{margin-left:auto}
+.gtag{display:inline-block;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:600}
+.gtag.g-NST{background:var(--g-NST);color:#08233f}
+.gtag.g-NSRST{background:var(--g-NSRST);color:#fff}
+.gtag.g-SR{background:var(--g-SR);color:#fff}
+.pchip{font-size:12px;font-weight:600;padding:4px 11px;border-radius:20px;cursor:pointer;white-space:nowrap;border:1px solid var(--ring)}
+.pchip.on{background:color-mix(in srgb,var(--c-fp) 18%,var(--surface));color:var(--c-fp);border-color:var(--c-fp)}
+.pchip.off{background:var(--surface);color:var(--muted)}
+.subnav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px}
+.subbtn{background:none;border:1px solid var(--ring);color:var(--ink2);padding:6px 13px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit}
+.subbtn.active{background:var(--accent);color:#fff;font-weight:600;border-color:var(--accent)}
+.oitem{border-bottom:1px solid var(--ring);padding-bottom:6px}
+.odesc{margin:2px 0 4px}
+.odesc summary{font-size:11.5px;color:var(--accent);font-weight:500}
+.odesc .note{margin:5px 0 2px}
+.fin{background:var(--accent);color:#fff;border-radius:9px;padding:9px 13px;font-size:12.5px;font-weight:600;text-align:center;margin-bottom:10px}
+.flanes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.flanes{grid-template-columns:1fr}}
+.flane h5{margin:0 0 8px;font-size:13px}
+.flane.safe{border-left:3px solid var(--pass);padding-left:11px}
+.flane.econ{border-left:3px solid var(--c-fp);padding-left:11px}
+.fbox{background:var(--page);border:1px solid var(--ring);border-radius:9px;padding:8px 11px;font-size:12px}
+.fbox b{display:block;font-size:12.5px}
+.fbox .fx{display:block;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--accent);margin:3px 0;word-break:break-word}
+.farr{text-align:center;color:var(--muted);font-size:15px;line-height:1.1;margin:2px 0}
+.fbtx{fill:var(--ink);font-size:10.5px}
+.fbl{fill:var(--muted);font-size:10px;font-weight:600}
+.flh{font-size:12px;font-weight:700}
+.tip{position:fixed;display:none;z-index:100;max-width:250px;background:var(--surface);color:var(--ink);border:1px solid var(--ring);border-radius:9px;padding:9px 12px;font-size:12px;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.18);pointer-events:none}
+.modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.modalcard{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:18px;max-width:640px;width:100%;max-height:86vh;display:flex;flex-direction:column}
+.csvta{width:100%;flex:1;min-height:280px;margin:10px 0;font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var(--ring);border-radius:8px;padding:10px;background:var(--page);color:var(--ink);white-space:pre;resize:vertical}
+</style>
+<div class="top"><h1>🔥 HTGR 최적설계 툴</h1><div id="nav"></div>
+<span id="pstate" class="pchip"></span>
+<button class="themebtn" onclick="var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark'?'light':'dark');if(window.render)render();">◐ 테마</button></div>
+<div id="panel"></div>
+<script>
+// HTGR 본선 계산 엔진 — 순수함수, node/브라우저 공용. 데이터는 ../data/*.yaml 값 내장.
+// (function(global){ ... })() 로 감싸 브라우저 window.ENGINE / node module.exports 양쪽 노출.
+(function(root){
+"use strict";
+
+// ---- 데이터 (data/*.yaml 정본) ----
+const C = [ // [name, base_price(백만원), recovery_days, system]
+ ["원자로압력용기",19000,180,"핵열공급계통"],
+ ["제어봉집합체",15200,60,"핵열공급계통"],
+ ["중간열교환기",11400,90,"핵열공급계통"],
+ ["헬륨순환기",11400,30,"핵열공급계통"],
+ ["교차용기",11400,180,"핵열공급계통"],
+ ["헬륨서비스계통",7600,10,"핵열공급계통"],
+ ["원자로공동냉각계통",16200,60,"잔열제거계통"],
+ ["정지냉각계통",10800,30,"잔열제거계통"],
+ ["급수펌프",4100,7,"보조계통"],
+ ["증기발생기",4100,45,"보조계통"],
+ ["계측제어전기계통",4100,14,"보조계통"],
+ ["디젤발전기",4100,3,"보조계통"],
+ ["비상배터리",2050,1,"보조계통"]];
+const CI={}; C.forEach((c,i)=>CI[c[0]]=i);
+const SCEN=[ // [id,name,[comps],combine,dose_mSv]
+ ["S01","소규모 배관 누설",["헬륨서비스계통"],"single",0.05],
+ ["S02","소외 전력 상실",["계측제어전기계통"],"single",0.01],
+ ["S03","단일 제어봉 오작동",["제어봉집합체","계측제어전기계통"],"or",0.01],
+ ["S04","중규모 배관 손상",["중간열교환기"],"single",5],
+ ["S05","가압 강제 냉각 상실",["헬륨순환기","계측제어전기계통"],"or",1],
+ ["S06","증기발생기 파손",["증기발생기"],"single",20],
+ ["S07","반응도 삽입",["제어봉집합체","계측제어전기계통"],"and",50],
+ ["S08","대형 배관 파단",["원자로압력용기","교차용기"],"or",80],
+ ["S09","잔열 제거 능력 완전 상실",["원자로공동냉각계통","정지냉각계통"],"and",250],
+ ["S10","정지불능 과도상태",["제어봉집합체","계측제어전기계통"],"and",150],
+ ["S11","소외전력상실",["디젤발전기","비상배터리"],"and",100]];
+SCEN.forEach(s=>s.push(s[2].map(n=>CI[n]))); // s[5]=comp indices
+
+function defaults(){return{
+ grades:{SR:{freq:1e-5,ratio:5},NSRST:{freq:1e-3,ratio:2},NST:{freq:1e-1,ratio:1}},
+ containBase:22550, remCapex:125700,
+ opexCash:24462, deprec:4077, opexTotal:28539,          // 감가상각 분리(이중계산 방지)
+ heatPrice:50, annualHeat:788400, lossDay:108, penDay:100,
+ constrYears:10, opYears:60, disc:0.045, esc:0.025, doseExp:2 };}
+
+function fcDose(f){ // 목표곡선 허용선량[REM] at 빈도 f
+ if(f>0.1)return 0.1/f; if(f>0.01)return 1;
+ if(f>1e-4)return 0.04*Math.pow(f,-0.699);
+ if(f>=5e-7)return 25*Math.pow(f/1e-4,-0.642); return Infinity; }
+
+function scenFreq(grades,s,G){
+ const idx=s[5];
+ if(s[3]==="single")return G[grades[idx[0]]].freq;
+ if(s[3]==="or"){let r=1;for(const i of idx)r*=(1-G[grades[i]].freq);return 1-r;}
+ let r=1;for(const i of idx)r*=G[grades[i]].freq;return r; }
+
+// grades: array[13] of 'SR'|'NSRST'|'NST'; x: 격납배수; opt:{penalty:bool, params}
+function compute(grades,x,opt){
+ const P=opt.params, G=P.grades;
+ let capex=P.remCapex+P.containBase*x;
+ for(let i=0;i<13;i++)capex+=C[i][1]*G[grades[i]].ratio;
+ const scen=[]; let npass=0;
+ for(const s of SCEN){
+   const f=scenFreq(grades,s,G), doseRem=(s[4]/10)/Math.pow(x,P.doseExp), allowed=fcDose(f);
+   const pass=doseRem<=allowed*(1+1e-9); if(pass)npass++;
+   scen.push({id:s[0],name:s[1],freq:f,dose:doseRem,allowed,pass,margin:allowed/doseRem});
+ }
+ let downtime=0,outEvents=0; for(let i=0;i<13;i++){downtime+=G[grades[i]].freq*C[i][2];outEvents+=G[grades[i]].freq;}
+ const availTrue=(365-downtime)/365, lossTrue=downtime*(P.lossDay+P.penDay);
+ const on=!!opt.penalty;
+ const avail=on?availTrue:1, loss=on?lossTrue:0, pen=on?downtime*P.penDay:0;
+ const supply=P.annualHeat*avail*1000; // kWh/년
+ const lcohCon=(capex/P.opYears)*1e6/supply, lcohOm=P.opexCash*1e6/supply, lcohFp=loss*1e6/supply;
+ const lcoh=lcohCon+lcohOm+lcohFp;
+ const annualCost=P.opexCash+capex/P.opYears+loss; // LCOH 분자(백만원/년)=연간총비용
+ const rev0=supply*P.heatPrice/1e6; // 백만원/년
+ const NY=P.constrYears+P.opYears;
+ const cf=yr=>yr<=P.constrYears? -capex/P.constrYears : (rev0-P.opexCash-pen)*Math.pow(1+P.esc,yr-P.constrYears-1);
+ const flows=[]; let cum=0,pb=null;
+ for(let yr=1;yr<=NY;yr++){const v=cf(yr);cum+=v;flows.push([yr,v,cum]);if(pb===null&&yr>P.constrYears&&cum>=0)pb=yr;}
+ const npvAt=r=>{let s=0;for(let yr=1;yr<=NY;yr++)s+=cf(yr)/Math.pow(1+r,yr);return s;};
+ const npv=npvAt(P.disc);
+ let lo=-0.5,hi=0.6;for(let k=0;k<90;k++){const m=(lo+hi)/2;if(npvAt(m)>0)lo=m;else hi=m;}
+ const irr=(lo+hi)/2;
+ return {capex,scen,npass,downtime,outEvents,availTrue,lossTrue,avail,loss,pen,lcoh,lcohCon,lcohOm,lcohFp,
+         annualCost,flows,npv,irr,payback:pb,rev0,supply};
+}
+
+// 격납 최소배수: 고정 등급조합에서 11/11 통과하는 최소 x (없으면 null)
+function minContainX(grades,opt){
+ const P=opt.params,G=P.grades; let xmin=1; const ex=P.doseExp||2;
+ for(const s of SCEN){
+   const f=scenFreq(grades,s,G), allowed=fcDose(f), d1=s[4]/10;
+   if(d1>allowed){ const need=Math.pow(d1/allowed,1/ex); if(need>xmin)xmin=need; }
+ }
+ return xmin>10.0000001? null : xmin;
+}
+
+// LCOH만 싸게 계산(최적화 내부용, IRR/현금흐름 생략). x_min 동시 산출.
+function evalLcohCheap(g,P,G,penalty){
+ let xmin=1; const ex=P.doseExp||2;
+ for(const s of SCEN){const f=scenFreq(g,s,G),allowed=fcDose(f),d1=s[4]/10;
+   if(d1>allowed){const need=Math.pow(d1/allowed,1/ex);if(need>xmin)xmin=need;}}
+ if(xmin>10.0000001)return null;
+ let capex=P.remCapex+P.containBase*xmin;
+ for(let i=0;i<13;i++)capex+=C[i][1]*G[g[i]].ratio;
+ let downtime=0;for(let i=0;i<13;i++)downtime+=G[g[i]].freq*C[i][2];
+ const avail=penalty?(365-downtime)/365:1, loss=penalty?downtime*(P.lossDay+P.penDay):0;
+ const supply=P.annualHeat*avail*1000;
+ const lcoh=(capex/P.opYears+P.opexCash+loss)*1e6/supply;
+ return {lcoh,x:xmin};
+}
+
+// 최적화: locked(index->grade) 고정, 나머지 전수전개. penalty 반영 LCOH 최소.
+// 청크 실행(브라우저 rAF) — 각 조합은 LCOH만 계산(빠름). best만 최종 full compute.
+function makeOptimizer(locked,opt){
+ const P=opt.params,G=P.grades,penalty=!!opt.penalty;
+ const free=[]; for(let i=0;i<13;i++) if(!(i in locked)) free.push(i);
+ const total=Math.pow(3,free.length);
+ const GN=["SR","NSRST","NST"];
+ const base=new Array(13); for(let i=0;i<13;i++) base[i]=locked[i]||"NST";
+ let i=0,best=null,feasible=0; const conv=[];
+ function evalCombo(n){
+   const g=base; let t=n;
+   for(const fi of free){ g[fi]=GN[t%3]; t=(t/3)|0; }
+   const r=evalLcohCheap(g,P,G,penalty);
+   if(r){ feasible++; if(!best||r.lcoh<best.lcoh) best={grades:g.slice(),x:r.x,lcoh:r.lcoh}; }
+ }
+ return {
+   total, free,
+   run(chunk,cb){ const stop=Math.min(i+chunk,total);
+     for(;i<stop;i++)evalCombo(i);
+     conv.push([i,best?best.lcoh:null]);
+     const done=i>=total;
+     if(done&&best) best.res=compute(best.grades,best.x,opt); // 최종만 full
+     if(cb)cb({count:i,total,feasible,best,done,conv});
+     return done;
+   },
+   runAll(){ for(;i<total;i++)evalCombo(i); if(best)best.res=compute(best.grades,best.x,opt);
+     return {count:total,total,feasible,best,conv}; },
+   state(){return{count:i,total,feasible,best,conv};}
+ };
+}
+
+const API={C,CI,SCEN,defaults,fcDose,compute,minContainX,makeOptimizer,
+ allGrades:g=>Array(13).fill(g)};
+if(typeof module!=="undefined"&&module.exports)module.exports=API;
+root.ENGINE=API;
+})(typeof self!=="undefined"?self:this);
+</script>
+<script>
+// ===== HTGR 본선 대시보드 앱 (engine=window.ENGINE) =====
+const E=window.ENGINE, C=E.C, CI=E.CI;
+const NS="http://www.w3.org/2000/svg";
+function elh(tag,attrs,html){const e=document.createElement(tag);for(const k in attrs){if(k==="class")e.className=attrs[k];else e.setAttribute(k,attrs[k]);}if(html!=null)e.innerHTML=html;return e;}
+function els(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function svg(w,h){const s=els("svg",{viewBox:`0 0 ${w} ${h}`,width:w,height:h});s.style.maxWidth="100%";s.style.height="auto";return s;}
+const L10=Math.log10, fmt=(n,d=0)=>Number(n).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d});
+function logmap(v,d0,d1,r0,r1){return r0+(L10(v)-L10(d0))/(L10(d1)-L10(d0))*(r1-r0);}
+function linmap(v,d0,d1,r0,r1){return r0+(v-d0)/(d1-d0)*(r1-r0);}
+// ---- tooltip (hover + touch) ----
+function tipEl(){let t=document.getElementById("tip");if(!t){t=elh("div",{class:"tip"});t.id="tip";document.body.appendChild(t);
+  document.addEventListener("touchstart",()=>hideTip());document.addEventListener("click",()=>hideTip());}return t;}
+function showTip(html,ev){const t=tipEl();t.innerHTML=html;t.style.display="block";
+  const x=ev.touches&&ev.touches[0]?ev.touches[0].clientX:ev.clientX;
+  const y=ev.touches&&ev.touches[0]?ev.touches[0].clientY:ev.clientY;
+  const w=t.offsetWidth||220;t.style.left=Math.max(8,Math.min(x+14,window.innerWidth-w-8))+"px";t.style.top=(y+14)+"px";}
+function hideTip(){const t=document.getElementById("tip");if(t)t.style.display="none";}
+
+// ---- state ----
+function freshState(){return{grades:Array(13).fill("NST"),locks:Array(13).fill(false),
+  x:1.0, penalty:true, params:E.defaults(), tab:"dash", calcSub:"cost", scenarios:load()};}
+let S=freshState();
+function load(){try{return JSON.parse(localStorage.getItem("htgr_scen")||"[]");}catch(e){return[];}}
+function save(){localStorage.setItem("htgr_scen",JSON.stringify(S.scenarios));}
+function opt(){return{penalty:S.penalty,params:S.params};}
+function result(){return E.compute(S.grades,S.x,opt());}
+
+// ---- tabs ----
+const TABS=[["dash","대시보드"],["calc","계산과정"],["opt","최적화"],["scen","시나리오"],["options","옵션"]];
+function render(){
+  const nav=document.getElementById("nav");nav.innerHTML="";
+  TABS.forEach(([id,label])=>{const b=elh("button",{class:"tabbtn"+(S.tab===id?" active":"")},label);
+    b.onclick=()=>{S.tab=id;render();};nav.appendChild(b);});
+  const ps=document.getElementById("pstate");
+  if(ps){ps.className="pchip "+(S.penalty?"on":"off");ps.textContent=(S.penalty?"● 신뢰도 페널티 ON":"○ 페널티 OFF");
+    ps.title="클릭하여 전환";ps.onclick=()=>{S.penalty=!S.penalty;render();};}
+  const p=document.getElementById("panel");p.innerHTML="";
+  ({dash:renderDash,calc:renderCalc,opt:renderOpt,scen:renderScen,options:renderOptions}[S.tab])(p);
+}
+
+// ============ TAB 1: DASHBOARD ============
+function renderDash(p){
+  const r=result();
+  const grid=elh("div",{class:"dashgrid"});p.appendChild(grid);
+  // ---- left controls ----
+  const left=elh("div",{class:"panelcard"});grid.appendChild(left);
+  left.appendChild(elh("div",{class:"cardh"},"설계 변수"));
+  left.appendChild(elh("p",{class:"note"},"등급을 누르면 그 부품의 건설비·고장빈도가 바뀝니다. <b>SR</b> 안전등급(비쌈·거의 안 고장) · <b>NSRST</b> 특별관리(중간) · <b>NST</b> 일반(쌈·자주 고장). <b>🔒</b>는 최적화가 그 등급을 못 바꾸게 고정."));
+  const sysGroups={};C.forEach((c,i)=>{(sysGroups[c[3]]=sysGroups[c[3]]||[]).push(i);});
+  for(const sys in sysGroups){
+    left.appendChild(elh("div",{class:"syslabel"},sys));
+    sysGroups[sys].forEach(i=>{
+      const row=elh("div",{class:"crow"});
+      row.appendChild(elh("span",{class:"cname"},C[i][0]));
+      const seg=elh("span",{class:"seg"});
+      ["NST","NSRST","SR"].forEach(g=>{const b=elh("button",{class:"segb g-"+g+(S.grades[i]===g?" on":"")},g);
+        b.onclick=()=>{if(S.locks[i])return;S.grades[i]=g;render();};seg.appendChild(b);});
+      row.appendChild(seg);
+      const lk=elh("button",{class:"lockb"+(S.locks[i]?" on":""),title:"등급 고정"},S.locks[i]?"🔒":"🔓");
+      lk.onclick=()=>{S.locks[i]=!S.locks[i];render();};row.appendChild(lk);
+      left.appendChild(row);
+    });
+  }
+  // containment slider
+  left.appendChild(elh("div",{class:"syslabel"},"격납건물 비용 배수 x"));
+  const sl=elh("input",{type:"range",min:"1",max:"10",step:"0.01",value:S.x,class:"slider"});
+  const slv=elh("span",{class:"slval"},"×"+S.x.toFixed(2));
+  sl.oninput=()=>{S.x=parseFloat(sl.value);slv.textContent="×"+S.x.toFixed(2);updateDashLive();};
+  const slwrap=elh("div",{class:"slwrap"});slwrap.appendChild(sl);slwrap.appendChild(slv);left.appendChild(slwrap);
+  // toggles + buttons
+  const btns=elh("div",{class:"btnrow"});
+  const pen=elh("button",{class:"tgl"+(S.penalty?" on":"")},"신뢰도 페널티 "+(S.penalty?"ON":"OFF"));
+  pen.onclick=()=>{S.penalty=!S.penalty;render();};btns.appendChild(pen);
+  const optb=elh("button",{class:"primary"},"⚡ 최적화 실행");
+  optb.onclick=()=>{S.tab="opt";S._autorun=true;render();};btns.appendChild(optb);
+  const rst=elh("button",{class:"ghost"},"↺ 기본값 복귀");
+  rst.onclick=()=>{const sc=S.scenarios;S=freshState();S.scenarios=sc;render();};btns.appendChild(rst);
+  const savb=elh("button",{class:"ghost"},"💾 시나리오 기록");
+  savb.onclick=()=>{saveScenario();};btns.appendChild(savb);
+  left.appendChild(btns);
+  left.appendChild(elh("p",{class:"note"},"<b>페널티</b>: 고장→열공급 중단 손실을 원가에 반영 켜기/끄기 · <b>최적화</b>: 현재 제약에서 LCOH(열 판매원가) 최소 설계를 자동 탐색 · <b>기본값 복귀</b>: 전부 NST·격납 ×1 · <b>기록</b>: 지금 설계를 시나리오 탭에 저장"));
+
+  // ---- right: KPIs + FC ----
+  const right=elh("div",{});grid.appendChild(right);
+  right.appendChild(kpiRow(r));
+  const fcCard=elh("div",{class:"panelcard"});
+  fcCard.appendChild(elh("div",{class:"cardh"},"F-C Curve — 안전 판정"));
+  fcCard.appendChild(fcChart(r));
+  right.appendChild(fcCard);
+  window._updateDash=()=>{right.replaceChild(kpiRow(result()),right.firstChild);
+    fcCard.replaceChild(fcChart(result()),fcCard.lastChild);};
+}
+function updateDashLive(){if(window._updateDash)window._updateDash();}
+function kpiRow(r){
+  const row=elh("div",{class:"kpirow"});
+  const safe=r.npass===11;
+  row.appendChild(kpi(r.npass+" / 11", "안전 F-C", safe?"good":"bad", safe?"✓ 통과":"✗ "+(11-r.npass)+"개 초과"));
+  const under=r.lcoh<=S.params.heatPrice;
+  row.appendChild(kpi(r.lcoh.toFixed(1)+"원", "LCOH (열 판매원가)", under?"good":"bad", "판매가 "+S.params.heatPrice+"원/kWh"));
+  row.appendChild(kpi((r.irr*100).toFixed(2)+"%", "IRR", r.irr>=S.params.disc?"good":"bad", "할인율 "+(S.params.disc*100)+"%"));
+  row.appendChild(kpi(fmt(r.capex), "총사업비 CAPEX", "", "백만원"));
+  row.appendChild(kpi(fmt(r.annualCost), "연간 총비용", "", "O&M+CAPEX/60"+(S.penalty?"+손실":"")));
+  row.appendChild(kpi((r.avail*100).toFixed(1)+"%", "등가 가동률", "", S.penalty?"정지 "+r.downtime.toFixed(1)+"일/년":"페널티 OFF"));
+  return row;
+}
+function kpi(v,l,cls,sub){return elh("div",{class:"kpi "+cls},`<div class="kv">${v}</div><div class="kl">${l}</div><div class="ks">${sub||""}</div>`);}
+
+// ============ FC CHART ============
+function fcChart(r){
+  const W=560,H=380,m={l:52,r:16,t:24,b:48};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  const dD=[1e-3,1e3],dF=[1e-7,1e1];
+  const X=v=>logmap(Math.max(dD[0],Math.min(dD[1],v)),dD[0],dD[1],x0,x1);
+  const Y=v=>logmap(Math.max(dF[0],Math.min(dF[1],v)),dF[0],dF[1],y0,y1);
+  for(let e=-3;e<=3;e++){const gx=X(Math.pow(10,e));els("line",{x1:gx,y1:y1,x2:gx,y2:y0,class:"gl"},s);
+    els("text",{x:gx,y:y0+15,"text-anchor":"middle",class:"ax"},s).textContent="1e"+e;}
+  for(let e=-7;e<=1;e++){const gy=Y(Math.pow(10,e));els("line",{x1:x0,y1:gy,x2:x1,y2:gy,class:"gl"},s);
+    els("text",{x:x0-6,y:gy+3,"text-anchor":"end",class:"ax"},s).textContent="1e"+e;}
+  // target curve + region
+  let pts=[];for(let lf=1;lf>=-6.3;lf-=0.05){const f=Math.pow(10,lf);let d=E.fcDose(f);if(!isFinite(d)||d>1e3)d=1e3;if(d<1e-3)d=1e-3;pts.push([X(d),Y(f)]);}
+  els("polygon",{points:pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")+` ${x0},${y0} ${x0},${y1}`,fill:"var(--pass)","fill-opacity":".07"},s);
+  els("path",{d:"M"+pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L"),fill:"none",stroke:"var(--muted)","stroke-width":2},s);
+  els("text",{x:X(1e3)-4,y:Y(2e-5),"text-anchor":"end",class:"axl",fill:"var(--muted)"},s).textContent="목표곡선";
+  r.scen.forEach((p,i)=>{const cx=X(p.dose),cy=Y(p.freq);
+    els("circle",{cx,cy,r:6,fill:p.pass?"var(--surface)":"var(--fail)",stroke:p.pass?"var(--pass)":"var(--fail)","stroke-width":2.2},s);
+    const comps=E.SCEN[i][2].join(", ");
+    const html=`<b>${p.id} · ${p.name}</b><br>연관 기기: ${comps}<br>결합 방식: <b>${E.SCEN[i][3].toUpperCase()}</b><br>사고 빈도: ${p.freq.toExponential(2)} 회/년<br>공공 선량: ${p.dose.toFixed(3)} REM (허용 ${p.allowed.toFixed(3)})<br><b style="color:${p.pass?'var(--pass)':'var(--fail)'}">${p.pass?"✓ 합격":"✗ 불합격"}</b> (여유 ×${p.margin.toFixed(2)})`;
+    const hit=els("circle",{cx,cy,r:16,fill:"transparent"},s);hit.style.cursor="pointer";
+    hit.addEventListener("mouseenter",e=>showTip(html,e));
+    hit.addEventListener("mousemove",e=>showTip(html,e));
+    hit.addEventListener("mouseleave",hideTip);
+    hit.addEventListener("touchstart",e=>{e.preventDefault();e.stopPropagation();showTip(html,e);},{passive:false});
+  });
+  els("circle",{cx:x0+12,cy:y1-4,r:5,fill:"var(--surface)",stroke:"var(--pass)","stroke-width":2},s);
+  els("text",{x:x0+21,y:y1,class:"ax",fill:"var(--ink2)"},s).textContent="합격";
+  els("circle",{cx:x0+62,cy:y1-4,r:5,fill:"var(--fail)"},s);
+  els("text",{x:x0+71,y:y1,class:"ax",fill:"var(--ink2)"},s).textContent="불합격";
+  els("text",{x:(x0+x1)/2,y:H-6,"text-anchor":"middle",class:"axl"},s).textContent="공공 선량 [REM] (log) →";
+  els("text",{x:-((y0+y1)/2),y:13,"text-anchor":"middle",class:"axl",transform:"rotate(-90)"},s).textContent="사고 빈도 [회/년] (log) →";
+  return s;
+}
+
+// ============ TAB 2: CALC ============
+function penaltyBanner(r){
+  const on=S.penalty;
+  const b=elh("div",{class:"pbanner "+(on?"on":"off")});
+  b.innerHTML=on
+    ? `<b>신뢰도 페널티 ON</b> — 기대 정지 <b>${r.downtime.toFixed(1)}일/년</b> · 연간 손실 <b>${fmt(r.loss)}</b>백만원 → LCOH에 <b>+${r.lcohFp.toFixed(1)}원</b> 반영. (가동률 ${(r.avail*100).toFixed(1)}%)`
+    : `<b>신뢰도 페널티 OFF</b> — 고장 무시(가동률 100% 가정). LCOH·현금흐름에 정지손실 미반영.`;
+  const t=elh("button",{class:"tgl "+(on?"on":"")},"페널티 "+(on?"끄기 →OFF":"켜기 →ON"));
+  t.onclick=()=>{S.penalty=!S.penalty;render();};b.appendChild(t);
+  return b;
+}
+const CALCSUBS=[["flow","계산 흐름"],["safety","안전성 (F-C)"],["cost","원가 (LCOH)"],["invest","투자성 (NPV/IRR)"],["adv","설계 근거"]];
+function renderCalc(p){
+  const r=result();
+  p.appendChild(penaltyBanner(r));
+  const sub=S.calcSub||"cost";
+  const nav=elh("div",{class:"subnav"});
+  CALCSUBS.forEach(([id,label])=>{const b=elh("button",{class:"subbtn"+(sub===id?" active":"")},label);
+    b.onclick=()=>{S.calcSub=id;render();};nav.appendChild(b);});
+  p.appendChild(nav);
+  ({flow:calcFlow,safety:calcSafety,cost:calcCost,invest:calcInvest,adv:calcAdv}[sub])(p,r);
+  const csv=elh("button",{class:"primary"},"⬇ CSV 저장 (전체 데이터)");
+  csv.onclick=()=>exportCSV(r);p.appendChild(csv);
+}
+function calcFlow(p,r){
+  const c=elh("div",{class:"panelcard"});
+  c.appendChild(elh("div",{class:"cardh"},"계산 알고리즘 — 부품을 바꾸면 이렇게 흐릅니다"));
+  c.appendChild(elh("p",{class:"note"},"입력(등급·격납 x) 하나가 <b>🛡️안전성(F-C)</b>과 <b>💰경제성(LCOH·NPV)</b> 두 갈래로 갈라져 계산됩니다."));
+  c.appendChild(flowSVG(r));
+  c.appendChild(elh("p",{class:"note"},`<span style="color:var(--pass)">■</span> 안전 경로 &nbsp; <span style="color:var(--c-fp)">■</span> 경제 경로 &nbsp;·&nbsp; 지금 이 설계: 안전 <b>${r.npass}/11</b> · LCOH <b>${r.lcoh.toFixed(1)}원</b> · IRR <b>${(r.irr*100).toFixed(2)}%</b> — 두 경로 모두 좋아야 좋은 설계.`));
+  p.appendChild(c);
+}
+function flowSVG(r){
+  const P=S.params, W=700;
+  const GN="var(--pass)",EC="var(--c-fp)",AC="var(--accent)";
+  const LX=178,RX=522,CX=350,w=270,gap=22,topY=100;
+  const leftNodes=[
+    ["등급 → 고장빈도 f","proc"],
+    ["AND ∏f · OR 1−∏(1−f)\n→ 사고별 빈도","proc"],
+    ["선량(mSv)/10 ÷ x^"+P.doseExp+"\n→ REM 위치","proc"],
+    ["11개 사고 모두\n목표곡선 아래?","dec"],
+    ["F-C 판정 ("+r.npass+"/11 합격)","term"]];
+  const rightNodes=[
+    ["등급 → 건설비\n(1배가 × 등급배수)","proc"],
+    ["CAPEX 합산\n(부품 + 격납 + 고정분)","proc"],
+    ["고장 → 정지일수\n· 가동률 · 손실","proc"],
+    ["LCOH =\n(O&M + CAPEX/60 + 손실) ÷ 열량","proc"],
+    ["60년 현금흐름\n→ NPV · IRR","proc"]];
+  const nh=(t,sh)=>{const n=t.split("\n").length;return sh==="term"?32:sh==="dec"?n*15+34:n*15+18;};
+  const layout=nodes=>{const arr=[];let y=topY;nodes.forEach(nd=>{const h=nh(nd[0],nd[1]);arr.push({text:nd[0],shape:nd[1],cy:y+h/2,h});y+=h+gap;});return{arr,bottom:y-gap};};
+  const Lc=layout(leftNodes),Rc=layout(rightNodes);
+  const H=Math.max(Lc.bottom,Rc.bottom)+64;
+  const s=svg(W,H);
+  const defs=els("defs",{},s);const mkr=els("marker",{id:"ah",markerWidth:9,markerHeight:9,refX:7,refY:4,orient:"auto"},defs);
+  els("path",{d:"M0,0 L8,4 L0,8 Z",fill:"var(--muted)"},mkr);
+  function box(cx,cy,ww,h,text,shape,color){
+    if(shape==="dec")els("polygon",{points:`${cx},${cy-h/2} ${cx+ww/2},${cy} ${cx},${cy+h/2} ${cx-ww/2},${cy}`,fill:"var(--surface)",stroke:color,"stroke-width":1.6},s);
+    else els("rect",{x:cx-ww/2,y:cy-h/2,width:ww,height:h,rx:shape==="term"?h/2:8,fill:"var(--surface)",stroke:color,"stroke-width":1.6},s);
+    const lines=text.split("\n"),ly=cy-(lines.length-1)*7.5;
+    lines.forEach((ln,i)=>els("text",{x:cx,y:ly+i*15+3.6,"text-anchor":"middle",class:"fbtx"},s).textContent=ln);
+  }
+  function vArr(x,y1,y2,label){els("path",{d:`M${x},${y1} L${x},${y2}`,stroke:"var(--muted)","stroke-width":1.5,fill:"none","marker-end":"url(#ah)"},s);
+    if(label)els("text",{x:x+8,y:(y1+y2)/2+3.5,class:"fbl"},s).textContent=label;}
+  function elbow(x1,y1,x2,y2){const my=(y1+y2)/2;els("path",{d:`M${x1},${y1} L${x1},${my} L${x2},${my} L${x2},${y2}`,stroke:"var(--muted)","stroke-width":1.5,fill:"none","marker-end":"url(#ah)"},s);}
+  box(CX,26,356,34,"입력: 부품 등급 · 격납배수 x 변경","term",AC);
+  els("text",{x:LX,y:60,"text-anchor":"middle",class:"flh",fill:GN},s).textContent="🛡️ 안전성 → F-C";
+  els("text",{x:RX,y:60,"text-anchor":"middle",class:"flh",fill:EC},s).textContent="💰 경제성 → LCOH/NPV";
+  elbow(CX,43,LX,Lc.arr[0].cy-Lc.arr[0].h/2);
+  elbow(CX,43,RX,Rc.arr[0].cy-Rc.arr[0].h/2);
+  function draw(col,cx,color,isLeft){col.arr.forEach((n,i)=>{box(cx,n.cy,w,n.h,n.text,n.shape,color);
+    if(i>0){const pv=col.arr[i-1];vArr(cx,pv.cy+pv.h/2,n.cy-n.h/2,(isLeft&&n.shape==="term")?"합격/불합격":null);}});}
+  draw(Lc,LX,GN,true);draw(Rc,RX,EC,false);
+  const endY=H-26;box(CX,endY,364,34,"설계 평가 완료 — 안전 & 경제 동시","term",AC);
+  const Lb=Lc.arr[Lc.arr.length-1],Rb=Rc.arr[Rc.arr.length-1];
+  elbow(LX,Lb.cy+Lb.h/2,CX,endY-17);elbow(RX,Rb.cy+Rb.h/2,CX,endY-17);
+  return s;
+}
+function calcSafety(p,r){
+  const fx=elh("div",{class:"panelcard"});fx.appendChild(elh("div",{class:"cardh"},"F-C 커브가 이렇게 나오는 이유"));
+  fx.appendChild(elh("p",{class:"note"},"각 점의 <b>세로(빈도)</b>=관련 부품 고장빈도를 AND(곱)·OR(합)으로 결합한 값 → 등급이 낮을수록 위로. <b>가로(선량)</b>=사고 선량 ÷ 격납배수² → 격납 x를 키우면 왼쪽으로 이동. 목표곡선(빨강) 아래·왼쪽이면 합격."));
+  fx.appendChild(fcChart(r));p.appendChild(fx);
+  const t=elh("div",{class:"panelcard"});t.appendChild(elh("div",{class:"cardh"},"사고별 빈도·선량·판정 ("+r.npass+"/11 합격)"));
+  t.appendChild(scenTable(r));p.appendChild(t);
+}
+function calcCost(p,r){
+  // 부품별 경제성 표
+  const ce=elh("div",{class:"panelcard"});
+  ce.appendChild(elh("div",{class:"cardh"},"1. 부품별 경제성 표 — 모든 원가의 출발점"));
+  ce.appendChild(elh("p",{class:"note"},"각 부품의 <b>등급 → 실제 건설비·고장빈도·기대손실</b>. CAPEX·LCOH·재무제표는 전부 이 표를 합친 것. 등급을 바꾸면 그 행의 가격과 손실이 바뀝니다."));
+  ce.appendChild(componentEconTable(r));
+  ce.appendChild(elh("p",{class:"note"},"※ <b>고정분(remaining) 125,700</b> = 보조기기 2,500 + 시공비 39,000 + 간접공사비 41,700 + 예비비 20,000 + 스팀배관 15,000 + 건설이자 7,500. (등급 최적화 대상 아님)"));
+  p.appendChild(ce);
+  // CAPEX 구성
+  const cx=elh("div",{class:"panelcard"});
+  cx.appendChild(elh("div",{class:"cardh"},"2. 총사업비(CAPEX) 구성 — 부품별 (색=등급)"));
+  cx.appendChild(elh("p",{class:"note"},`합계 ${fmt(r.capex)}백만원. 특정 부품 등급을 올리면 해당 막대만 길어집니다.`));
+  cx.appendChild(capexChart(r));p.appendChild(cx);
+  // LCOH 분해
+  const lc=elh("div",{class:"panelcard"});lc.appendChild(elh("div",{class:"cardh"},"3. LCOH 원가분해 (연간총비용 ÷ 공급열량)"));
+  lc.appendChild(lcohBar(r));
+  lc.appendChild(elh("p",{class:"note"},`연간총비용 ${fmt(r.annualCost)}백만원 = <b>O&M ${fmt(S.params.opexCash)}</b>(매년 반복되는 연간비, 60으로 나누지 않음) + <b>CAPEX/60 = ${fmt(r.capex/60)}</b>(자본비를 운영 60년에 균등 회수 — 문제지 공식) ${S.penalty?"+ <b>고장손실 "+fmt(r.loss)+"</b>":""}. ÷ 공급열량 ${fmt(r.supply/1e6)}백만kWh.`));
+  lc.appendChild(elh("p",{class:"note"},"⚠️ <b>건설비는 LCOH에선 /60</b>(운영수명 균등회수)이고, <b>현금흐름에선 /10</b>(실제 건설 10년 지출)입니다 — 둘은 목적이 다릅니다. LCOH의 O&M(24,462)은 나누는 게 아니라 매 해 그대로 드는 연간비입니다."));
+  lc.appendChild(elh("p",{class:"note"},"🔴 <b>페널티가 수식에 들어가는 법</b> — <b>ON</b>: 분자에 <b>고장손실(=정지일수×208백만원)</b>을 더하고, 분모 공급열량을 <b>×가동률</b>(=(365−정지일수)/365)로 줄임. <b>OFF</b>: 손실 0, 가동률 100%로 둠. 그래서 같은 설계라도 페널티 여부가 LCOH·IRR을 바꿉니다."));
+  p.appendChild(lc);
+}
+function calcInvest(p,r){
+  const sum=elh("div",{class:"panelcard"});
+  sum.appendChild(elh("div",{class:"cardh"},"LCOH · NPV · IRR 요약 (현재 설계)"));
+  const kr=elh("div",{class:"kpirow"});
+  kr.appendChild(kpi(r.lcoh.toFixed(1)+"원","LCOH (열 판매원가)",r.lcoh<=S.params.heatPrice?"good":"bad","판매가 "+S.params.heatPrice+"원"));
+  kr.appendChild(kpi(fmt(r.npv)+"","NPV 백만원",r.npv>=0?"good":"bad","할인율 "+(S.params.disc*100).toFixed(1)+"% 기준"));
+  kr.appendChild(kpi((r.irr*100).toFixed(2)+"%","IRR",r.irr>=S.params.disc?"good":"bad","할인율보다 높으면 투자가치"));
+  kr.appendChild(kpi(r.payback?r.payback+"년":"미회수","비할인 회수",r.payback?"good":"bad",""));
+  sum.appendChild(kr);
+  sum.appendChild(elh("p",{class:"note"},"※ <b>할인율(discount rate)</b>: 미래의 돈을 현재가치로 깎는 비율. \"1년 뒤 100원 = 지금 "+(100/(1+S.params.disc)).toFixed(1)+"원\". IRR이 할인율보다 크면 요구수익률을 넘겨 투자가치가 있다는 뜻. (옵션 탭에서 조정)"));
+  p.appendChild(sum);
+  const nc=elh("div",{class:"panelcard"});nc.appendChild(elh("div",{class:"cardh"},"누적현금흐름 (10년 건설 + 60년 운영)"));
+  nc.appendChild(elh("p",{class:"note"},"건설기(1~10년): CAPEX를 <b>1/10씩</b> 지출(음). 운영기(11~70년): 매년 (열매출 − O&M − 위약금)에 상승률을 복리 적용해 수령(양). 누적선이 0을 넘는 해가 회수 시점, NPV는 이를 할인율로 현재가치화."));
+  nc.appendChild(elh("p",{class:"note"},"※ <b>현금흐름의 페널티 처리</b>: 열매출은 이미 가동률만큼 줄어(못 판 열=판매손실 반영) 있으므로, 현금흐름엔 <b>위약금(100/일)만</b> 추가로 뺍니다 — 판매손실을 이중으로 세지 않기 위함. 반면 <b>LCOH</b>는 문제지 정의를 따라 분자에 <b>208/일(판매손실+위약금)</b>을 넣습니다(공식 지표라 그대로 준수). 두 안 모두 이 설계가 양호하므로 결론은 일치."));
+  nc.appendChild(npvChart(r));p.appendChild(nc);
+  p.appendChild(finTable(r));
+}
+function calcAdv(p,r){
+  const sw=elh("div",{class:"panelcard"});sw.appendChild(elh("div",{class:"cardh"},"왜 SR을 안 하나 — 부품별 (→)SR 전환비용 vs 신뢰도 이득"));
+  sw.appendChild(elh("p",{class:"note"},"각 부품을 SR로 올릴 때: <b>전환비용</b>(연환산 CAPEX 증가) vs <b>신뢰도 이득</b>(연간 손실 절감). 대부분 비용이 이득을 압도 → 경제적으로 SR 불필요. (발표 Discussion용)"));
+  sw.appendChild(srWorthChart(r));p.appendChild(sw);
+  p.appendChild(detailsBlock(r));
+}
+function componentEconTable(r){
+  const G=S.params.grades;const wrap=elh("div",{class:"tblwrap"});
+  let h="<table class='dt'><thead><tr><th>부품</th><th>등급</th><th>1배가격<br>(백만원)</th><th>실제 건설비<br>(백만원)</th><th>고장빈도<br>(회/년)</th><th>복구일<br>(일)</th><th>기대손실<br>(백만원/년)</th></tr></thead><tbody>";
+  C.forEach((c,i)=>{const g=S.grades[i];const price=c[1]*G[g].ratio;const eloss=G[g].freq*c[2]*(S.params.lossDay+S.params.penDay);
+    h+=`<tr><td>${c[0]}</td><td><span class="gtag g-${g}">${g}</span></td><td class='num'>${fmt(c[1])}</td><td class='num'>${fmt(price)}</td><td class='num'>${G[g].freq.toExponential(0)}</td><td class='num'>${c[2]}</td><td class='num'>${S.penalty?eloss.toFixed(1):"—"}</td></tr>`;});
+  h+=`<tr class='tot'><td>기기 소계</td><td></td><td></td><td class='num'>${fmt(C.reduce((s,c,i)=>s+c[1]*G[S.grades[i]].ratio,0))}</td><td colspan=3></td></tr>`;
+  h+=`<tr><td>격납건물 ×${S.x.toFixed(2)}</td><td></td><td class='num'>22,550</td><td class='num'>${fmt(22550*S.x)}</td><td colspan=3></td></tr>`;
+  h+=`<tr><td>고정분(remaining)</td><td></td><td></td><td class='num'>125,700</td><td colspan=3></td></tr>`;
+  h+=`<tr class='tot'><td>총 CAPEX</td><td></td><td></td><td class='num'>${fmt(r.capex)}</td><td colspan=3></td></tr>`;
+  h+="</tbody></table>";wrap.innerHTML=h;return wrap;
+}
+function scenTable(r){
+  const wrap=elh("div",{class:"tblwrap"});
+  let h="<table class='dt'><thead><tr><th>사고</th><th>부품</th><th>결합</th><th>빈도<br>(회/년)</th><th>선량<br>(REM)</th><th>허용<br>(REM)</th><th>판정</th></tr></thead><tbody>";
+  E.SCEN.forEach((sc,i)=>{const p=r.scen[i];h+=`<tr><td>${p.id} ${p.name}</td><td>${sc[2].join("+")}</td><td>${sc[3]}</td><td class='num'>${p.freq.toExponential(2)}</td><td class='num'>${p.dose.toFixed(3)}</td><td class='num'>${p.allowed.toFixed(3)}</td><td>${p.pass?"✓":"✗"}</td></tr>`;});
+  h+="</tbody></table>";wrap.innerHTML=h;return wrap;
+}
+function capexChart(r){
+  const G=S.params.grades;
+  const items=C.map((c,i)=>({name:c[0],val:c[1]*G[S.grades[i]].ratio,g:S.grades[i]}))
+    .concat([{name:"격납건물",val:22550*S.x,g:null},{name:"고정분",val:125700,g:null}])
+    .sort((a,b)=>b.val-a.val);
+  const W=560,H=Math.max(240,items.length*22+40),m={l:130,r:70,t:8,b:26};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const maxV=Math.max(...items.map(t=>t.val));
+  const X=v=>linmap(v,0,maxV,x0,x1);const bh=(y0-y1)/items.length;
+  for(let v=0;v<=maxV;v+=50000){const gx=X(v);els("line",{x1:gx,y1:y1,x2:gx,y2:y0,class:"gl"},s);els("text",{x:gx,y:y0+14,"text-anchor":"middle",class:"ax"},s).textContent=fmt(v/1000)+"k";}
+  items.forEach((t,i)=>{const by=y1+i*bh+2;const col=t.g?`var(--g-${t.g})`:"var(--muted)";
+    els("rect",{x:x0,y:by,width:Math.max(1,X(t.val)-x0),height:bh-4,rx:2,fill:col,stroke:t.g==="NST"?"var(--g-SR)":"none","stroke-width":.7},s);
+    els("text",{x:x0-6,y:by+bh/2+1,"text-anchor":"end",class:"ax",fill:"var(--ink2)"},s).textContent=t.name;
+    if(t.val>maxV*0.12)els("text",{x:X(t.val)+5,y:by+bh/2+1,class:"ax",fill:"var(--ink2)"},s).textContent=fmt(t.val);});
+  return s;
+}
+function srWorthChart(r){
+  const G=S.params.grades, day=S.params.lossDay+S.params.penDay;
+  // 각 부품: 현재→SR 전환. cost=연환산 capex 증가, benefit=연간 손실절감
+  const items=C.map((c,i)=>{const g=S.grades[i];
+    const cost=(c[1]*(G.SR.ratio-G[g].ratio))/S.params.opYears;
+    const benefit=(G[g].freq-G.SR.freq)*c[2]*day;
+    return {name:c[0],cost:Math.max(0,cost),benefit:Math.max(0,benefit),g};
+  }).filter(t=>t.g!=="SR").sort((a,b)=>b.cost-a.cost);
+  const W=560,H=Math.max(220,items.length*26+50),m={l:110,r:120,t:10,b:26};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  const maxV=Math.max(...items.map(t=>Math.max(t.cost,t.benefit)),1);
+  const X=v=>linmap(v,0,maxV,x0,x1);const rh=(y0-y1)/items.length;
+  for(let k=0;k<=4;k++){const v=maxV*k/4;const gx=X(v);els("line",{x1:gx,y1:y1,x2:gx,y2:y0,class:"gl"},s);els("text",{x:gx,y:y0+14,"text-anchor":"middle",class:"ax"},s).textContent=fmt(v);}
+  items.forEach((t,i)=>{const cy=y1+i*rh;const bh=rh*0.34;
+    els("rect",{x:x0,y:cy+rh*0.14,width:Math.max(0,X(t.cost)-x0),height:bh,rx:2,fill:"var(--fail)","fill-opacity":.8},s);
+    els("rect",{x:x0,y:cy+rh*0.52,width:Math.max(0,X(t.benefit)-x0),height:bh,rx:2,fill:"var(--pass)","fill-opacity":.8},s);
+    els("text",{x:x0-6,y:cy+rh/2+1,"text-anchor":"end",class:"ax",fill:"var(--ink2)"},s).textContent=t.name;});
+  els("rect",{x:x1+8,y:y1,width:11,height:11,rx:2,fill:"var(--fail)","fill-opacity":.8},s);
+  els("text",{x:x1+23,y:y1+9,class:"ax",fill:"var(--ink2)"},s).textContent="SR 전환비용";
+  els("rect",{x:x1+8,y:y1+18,width:11,height:11,rx:2,fill:"var(--pass)","fill-opacity":.8},s);
+  els("text",{x:x1+23,y:y1+27,class:"ax",fill:"var(--ink2)"},s).textContent="신뢰도 이득";
+  els("text",{x:(x0+x1)/2,y:H-3,"text-anchor":"middle",class:"axl"},s).textContent="백만원/년 (연환산)";
+  return s;
+}
+function lcohBar(r){
+  const W=560,H=150,m={l:44,r:150,t:12,b:20};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const maxV=Math.max(80,r.lcoh*1.15);
+  const X=v=>linmap(v,0,maxV,x0,x1);
+  for(let v=0;v<=maxV;v+=20){const gx=X(v);els("line",{x1:gx,y1:y1,x2:gx,y2:y0,class:"gl"},s);els("text",{x:gx,y:y0+14,"text-anchor":"middle",class:"ax"},s).textContent=v;}
+  const segs=[["건설(capex/60)",r.lcohCon,"--c-con"],["O&M",r.lcohOm,"--c-om"],["고장 페널티",r.lcohFp,"--c-fp"]];
+  let acc=0;segs.forEach(sg=>{const xl=X(acc),xr=X(acc+sg[1]);els("rect",{x:xl,y:y1+20,width:Math.max(0,xr-xl-2),height:34,rx:2,fill:`var(${sg[2]})`},s);acc+=sg[1];});
+  const g50=X(S.params.heatPrice);els("line",{x1:g50,y1:y1,x2:g50,y2:y0,stroke:"var(--muted)","stroke-width":1.6},s);
+  els("text",{x:g50,y:y1-2,"text-anchor":"middle",class:"ax",fill:"var(--muted)"},s).textContent="판매가 "+S.params.heatPrice;
+  els("text",{x:X(acc)+6,y:y1+41,class:"dlabel"},s).textContent=r.lcoh.toFixed(1)+"원";
+  segs.forEach((sg,i)=>{els("rect",{x:x1+8,y:y1+i*20,width:12,height:12,rx:2,fill:`var(${sg[2]})`},s);
+    els("text",{x:x1+24,y:y1+10+i*20,class:"ax",fill:"var(--ink2)"},s).textContent=sg[0]+" "+sg[1].toFixed(1);});
+  return s;
+}
+function npvChart(r){
+  const W=560,H=260,m={l:60,r:16,t:16,b:34};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const NY=r.flows.length;
+  const cums=r.flows.map(f=>f[2]);const cmin=Math.min(0,...cums),cmax=Math.max(...cums);
+  const X=v=>linmap(v,0,NY,x0,x1),Y=v=>linmap(v,cmin,cmax,y0,y1);const zero=Y(0);
+  for(let i=0;i<=4;i++){const v=cmin+(cmax-cmin)*i/4;const gy=Y(v);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,class:"gl"},s);
+    els("text",{x:x0-6,y:gy+3,"text-anchor":"end",class:"ax"},s).textContent=(v/1000).toFixed(0)+"k";}
+  els("line",{x1:x0,y1:zero,x2:x1,y2:zero,class:"baseline"},s);
+  for(let yr=0;yr<=NY;yr+=10){els("text",{x:X(yr),y:y0+14,"text-anchor":"middle",class:"ax"},s).textContent=yr;}
+  const bw=(X(1)-X(0))*0.7;
+  r.flows.forEach(f=>{const cf=f[1];const yv=Y(cf*8);els("rect",{x:X(f[0])-bw/2,y:Math.min(yv,zero),width:bw,height:Math.abs(yv-zero),fill:cf>=0?"var(--cf-pos)":"var(--cf-neg)","fill-opacity":.5},s);});
+  els("path",{d:"M"+r.flows.map(f=>X(f[0]).toFixed(1)+","+Y(f[2]).toFixed(1)).join("L"),fill:"none",stroke:"var(--ink)","stroke-width":2},s);
+  if(r.payback){els("circle",{cx:X(r.payback),cy:zero,r:5,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2},s);
+    els("text",{x:X(r.payback)+7,y:zero-7,class:"dlabel"},s).textContent="회수 "+r.payback+"년";}
+  els("text",{x:(x0+x1)/2,y:H-4,"text-anchor":"middle",class:"axl"},s).textContent="사업연도 (막대=순현금흐름 ±, 선=누적, 단위 백만원)";
+  return s;
+}
+function finTable(r){
+  const P=S.params,CY=P.constrYears;
+  const d=elh("details",{class:"panelcard"});d.appendChild(elh("summary",{},"재무제표 (연도별 구성) — 펼치기"));
+  const wrap=elh("div",{class:"tblwrap"});
+  let h="<table class='dt'><thead><tr><th>연도</th><th>구분</th><th>매출</th><th>O&M</th><th>위약금</th><th>CAPEX</th><th>순현금</th><th>누적</th></tr></thead><tbody>";
+  r.flows.forEach(f=>{const y=f[0];if(!(y<=CY||y%5===0||y===r.payback||y===r.flows.length))return;
+    let rev="—",om="—",pen="—",cap="—";
+    if(y<=CY){cap="−"+fmt(r.capex/CY);}
+    else{const g=Math.pow(1+P.esc,y-CY-1);rev=fmt(r.rev0*g);om="−"+fmt(P.opexCash*g);pen=(r.pen>0?"−"+fmt(r.pen*g):"0");}
+    h+=`<tr><td>${y}</td><td>${y<=CY?"건설":"운영"}</td><td class='num'>${rev}</td><td class='num'>${om}</td><td class='num'>${pen}</td><td class='num'>${cap}</td><td class='num'>${fmt(f[1])}</td><td class='num'>${fmt(f[2])}</td></tr>`;});
+  h+="</tbody></table>";wrap.innerHTML=h;d.appendChild(wrap);
+  d.appendChild(elh("p",{class:"note"},"건설기 10년은 CAPEX를 1/10씩 지출, 운영기 60년은 (매출−O&M−위약금)에 상승률 "+(P.esc*100)+"%/년 적용. 세금은 문제지에 없어 세전 기준."));
+  return d;
+}
+function detailsBlock(r){
+  const d=elh("details",{class:"panelcard"});d.appendChild(elh("summary",{},"계산 근거 (더보기) — 운영비 분해 · 고장확률 · 가격 산정"));
+  const P=S.params;const supply1=P.annualHeat*1000;
+  let h=`<p class="note">LCOH = (연간 O&M + CAPEX/60 + 고장 페널티) / 실제 공급열량. <b>감가상각 4,077은 O&M(24,462)에서 제외</b>(CAPEX/60로 별도 계상, 이중계산 방지).</p>`;
+  h+="<h4>운영비(O&M) 분해 — 왜 O&M이 큰가</h4><table class='dt'><thead><tr><th>항목</th><th>백만원/년</th><th>원/kWh*</th></tr></thead><tbody>";
+  [["인건·유지·보충재 등",9500],["핵연료",8000],["전력비",5212],["폐로비",800],["용수",700],["감속재",250]].forEach(x=>h+=`<tr><td>${x[0]}</td><td class='num'>${fmt(x[1])}</td><td class='num'>${(x[1]*1e6/supply1).toFixed(1)}</td></tr>`);
+  h+=`<tr class='tot'><td>O&M 합계(감가상각 제외)</td><td class='num'>24,462</td><td class='num'>${(24462*1e6/supply1).toFixed(1)}</td></tr></tbody></table><p class="note">*가동률 1.0 기준. 핵연료+전력이 지배 → 100MWth·싼 열 구조에서 정상.</p>`;
+  h+="<h4>시나리오 고장확률 (현재 등급)</h4><table class='dt'><thead><tr><th>사고</th><th>결합</th><th>빈도</th><th>선량REM</th><th>허용</th><th>판정</th></tr></thead><tbody>";
+  E.SCEN.forEach((sc,i)=>{const p=r.scen[i];h+=`<tr><td>${p.id} ${p.name}</td><td>${sc[3]}</td><td class='num'>${p.freq.toExponential(2)}</td><td class='num'>${p.dose.toFixed(3)}</td><td class='num'>${p.allowed.toFixed(3)}</td><td>${p.pass?"✓":"✗"}</td></tr>`;});
+  h+="</tbody></table>";
+  const wrap=elh("div",{class:"tblwrap"});wrap.innerHTML=h;d.appendChild(wrap);return d;
+}
+function buildCSV(r){
+  const P=S.params,G=P.grades,rows=[];
+  const push=(...a)=>rows.push(a);
+  push("[HTGR 최적설계 스냅샷]");
+  push("[생성 조건]");
+  push("신뢰도 페널티",S.penalty?"ON":"OFF");
+  push("격납배수 x",S.x.toFixed(3));
+  push("SR 가산율",G.SR.ratio);push("NSRST 가산율",G.NSRST.ratio);
+  push("SR 고장빈도(회/년)",G.SR.freq);push("NSRST 고장빈도",G.NSRST.freq);push("NST 고장빈도",G.NST.freq);
+  push("선량저감 지수 n",P.doseExp);
+  push("할인율",P.disc);push("상승률",P.esc);push("열판매단가(원/kWh)",P.heatPrice);
+  push("정지 판매손실(백만원/일)",P.lossDay);push("정지 위약금(백만원/일)",P.penDay);
+  push("");push("[부품별]");
+  push("기기","등급","실제건설비(백만원)","고장빈도(회/년)","복구일(일)","기대손실(백만원/년)");
+  C.forEach((c,i)=>{const g=S.grades[i];push(c[0],g,c[1]*G[g].ratio,G[g].freq,c[2],(S.penalty?G[g].freq*c[2]*(P.lossDay+P.penDay):0).toFixed(2));});
+  push("");push("[사고별 F-C]");
+  push("id","사고","연관기기","결합","빈도(회/년)","선량(REM)","허용(REM)","판정");
+  r.scen.forEach((p,i)=>push(p.id,p.name,E.SCEN[i][2].join(" | "),E.SCEN[i][3],p.freq,p.dose,p.allowed,p.pass?"합격":"불합격"));
+  push("");push("[결과지표]");
+  push("LCOH(원/kWh)",r.lcoh.toFixed(2));
+  push(" - 건설(CAPEX/60)",r.lcohCon.toFixed(2));push(" - O&M",r.lcohOm.toFixed(2));push(" - 고장페널티",r.lcohFp.toFixed(2));
+  push("CAPEX(백만원)",Math.round(r.capex));push("연간총비용(백만원)",Math.round(r.annualCost));
+  push("등가가동률",r.avail.toFixed(4));push("기대정지일수(일/년)",r.downtime.toFixed(2));
+  push("NPV(백만원)",Math.round(r.npv));push("IRR(%)",(r.irr*100).toFixed(2));
+  push("비할인 회수(년)",r.payback||"미회수");push("F-C 통과",r.npass+"/11");
+  push("");push("[연도별 현금흐름]");
+  push("연도","구분","매출","O&M","위약금","CAPEX","순현금","누적");
+  r.flows.forEach(f=>{const y=f[0];let rev="",om="",pen="",cap="";
+    if(y<=P.constrYears)cap=(-r.capex/P.constrYears).toFixed(0);
+    else{const g=Math.pow(1+P.esc,y-P.constrYears-1);rev=(r.rev0*g).toFixed(0);om=(-P.opexCash*g).toFixed(0);pen=(-r.pen*g).toFixed(0);}
+    push(y,y<=P.constrYears?"건설":"운영",rev,om,pen,cap,f[1].toFixed(0),f[2].toFixed(0));});
+  return rows.map(row=>row.map(c=>{const s=String(c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",")).join("\n");
+}
+function exportCSV(r){
+  const csv=buildCSV(r);
+  const ov=elh("div",{class:"modal"});
+  const card=elh("div",{class:"modalcard"});
+  card.appendChild(elh("div",{class:"cardh"},"CSV 저장 / 복사"));
+  card.appendChild(elh("p",{class:"note"},"아래 내용이 현재 설계의 전체 데이터입니다. <b>복사</b>하거나 <b>다운로드</b>하세요. (복사 후 엑셀·구글시트에 붙여넣기 가능)"));
+  const ta=elh("textarea",{class:"csvta",readonly:"readonly"});ta.value=csv;card.appendChild(ta);
+  const br=elh("div",{class:"btnrow"});
+  const cp=elh("button",{class:"primary"},"📋 클립보드 복사");
+  cp.onclick=()=>{ta.select();let ok=false;try{ok=document.execCommand("copy");}catch(e){}
+    if(navigator.clipboard)navigator.clipboard.writeText(csv).then(()=>{cp.textContent="✓ 복사됨";},()=>{});
+    else cp.textContent=ok?"✓ 복사됨":"복사 실패 — 수동 선택하세요";};
+  br.appendChild(cp);
+  const dl=elh("button",{class:"ghost"},"⬇ 파일 다운로드");
+  dl.onclick=()=>{try{const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);const a=elh("a",{href:url,download:"htgr_design.csv"});
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){alert("다운로드가 차단된 환경입니다. 복사를 이용하세요.");}};
+  br.appendChild(dl);
+  const cl=elh("button",{class:"ghost"},"닫기");cl.onclick=()=>ov.remove();br.appendChild(cl);
+  card.appendChild(br);ov.appendChild(card);
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  document.body.appendChild(ov);ta.focus();ta.select();
+}
+
+// ============ TAB 3: OPTIMIZE ============
+function renderOpt(p){
+  const locked={};C.forEach((c,i)=>{if(S.locks[i])locked[i]=S.grades[i];});
+  const nLock=Object.keys(locked).length;
+  const info=elh("div",{class:"panelcard"});
+  info.appendChild(elh("div",{class:"cardh"},"제약 조건"));
+  info.innerHTML+=`<p class="note">신뢰도 페널티: <b>${S.penalty?"ON":"OFF"}</b> · 고정 기기: <b>${nLock}개</b> ${nLock?"("+Object.keys(locked).map(i=>C[i][0]+"="+locked[i]).join(", ")+")":""} · 탐색공간 3^${13-nLock} = ${fmt(Math.pow(3,13-nLock))} 조합`;
+  p.appendChild(info);
+  // process diagram (static)
+  const proc=elh("div",{class:"panelcard"});proc.appendChild(elh("div",{class:"cardh"},"어떻게 '가장 싼 안전 설계'를 찾나"));
+  proc.appendChild(elh("p",{class:"note"},"목표는 <b>안전 기준(F-C)을 통과하는 가장 싼 설계</b> 찾기입니다. 우리가 바꿀 수 있는 건 딱 둘 — <b>①부품 13개의 등급</b>, <b>②격납건물에 돈을 얼마나 쓸지(배수 x)</b>."));
+  proc.appendChild(elh("p",{class:"note"},"핵심 요령: <b>격납건물에 쓸 돈은 조합마다 '딱 정해집니다'</b>. 안전 기준을 겨우 통과하는 금액보다 <b>덜 쓰면 방사선이 기준을 넘어 탈락</b>, <b>더 쓰면 그냥 돈 낭비</b>죠. 그래서 격납 금액은 <b>바로 계산</b>해 버리고, 남은 건 부품 등급 조합뿐 — 이건 컴퓨터가 전부 확인합니다."));
+  proc.innerHTML+=`<div class="flow">
+    <div class="fnode"><b>① 등급 조합 하나 고르기</b>부품 13개를 각각 3등급 중 하나로 → 약 <b>160만 가지</b>(3¹³) 중 하나</div><div class="farrow">→</div>
+    <div class="fnode"><b>② 필요한 최소 격납 금액 계산</b>그 조합이 <b>안전 11/11을 겨우 통과</b>하는 격납 배수를 바로 계산. 최대(×10)로도 못 통과하면 이 조합 탈락</div><div class="farrow">→</div>
+    <div class="fnode"><b>③ 이 조합의 가장 싼 비용 확정</b>격납을 최소로 맞췄으니, 이게 이 조합에서 낼 수 있는 <b>제일 싼 안전 비용(LCOH)</b></div><div class="farrow">→</div>
+    <div class="fnode"><b>④ 전부 비교해 1등</b>160만 조합의 최저 비용을 모아 <b>가장 싼 것 = 최적 설계</b></div></div>`;
+  proc.appendChild(elh("p",{class:"note"},"격납 금액을 이리저리 시도해볼 필요 없이 곧바로 계산하므로, <b>어림짐작·무작위 없이 정확</b>하고 <b>몇 초면</b> 끝납니다. (부품을 🔒고정하거나 페널티를 끄면, 그 조건 안에서 똑같이 다시 최적을 찾습니다.)"));
+  p.appendChild(proc);
+  // run + charts
+  const runc=elh("div",{class:"panelcard"});runc.appendChild(elh("div",{class:"cardh"},"최적화 실행"));
+  const btn=elh("button",{class:"primary"},"⚡ 최적화 시작");
+  const prog=elh("div",{class:"note"},"대기 중");
+  const chartbox=elh("div",{});
+  const resbox=elh("div",{});
+  runc.appendChild(btn);runc.appendChild(prog);runc.appendChild(chartbox);runc.appendChild(resbox);
+  p.appendChild(runc);
+  btn.onclick=()=>runOptimize(locked,prog,chartbox,resbox);
+  if(S._autorun){S._autorun=false;setTimeout(()=>btn.click(),60);}
+}
+function runOptimize(locked,prog,chartbox,resbox){
+  const o=E.makeOptimizer(locked,opt());const chunk=Math.max(20000,Math.floor(o.total/40));
+  function step(){const done=o.run(chunk);const st=o.state();
+    prog.innerHTML=`평가 <b>${fmt(st.count)}</b> / ${fmt(st.total)} · feasible ${fmt(st.feasible)} · best LCOH ${st.best?st.best.lcoh.toFixed(2):"—"}`;
+    chartbox.innerHTML="";chartbox.appendChild(convChart(st.conv));
+    if(!done)requestAnimationFrame(step);else finishOpt(o,resbox);}
+  requestAnimationFrame(step);
+}
+function finishOpt(o,resbox){
+  const b=o.state().best;if(!b){resbox.innerHTML="<p class='note'>F-C를 만족하는 설계 없음(제약 과함).</p>";return;}
+  const cnt={SR:0,NSRST:0,NST:0};b.grades.forEach(g=>cnt[g]++);
+  resbox.innerHTML=`<div class="cardh" style="margin-top:14px">최적 설계</div>
+    <div class="kpirow">
+      ${kpi(b.lcoh.toFixed(1)+"원","LCOH","good","").outerHTML}
+      ${kpi("×"+b.x.toFixed(3),"격납 x","","").outerHTML}
+      ${kpi((b.res.irr*100).toFixed(2)+"%","IRR",b.res.irr>=S.params.disc?"good":"bad","").outerHTML}
+      ${kpi(`SR ${cnt.SR}·NSRST ${cnt.NSRST}·NST ${cnt.NST}`,"등급분포","","").outerHTML}
+    </div>`;
+  const cont=elh("div",{});cont.appendChild(elh("div",{class:"cardh"},"격납 최적점 (이 조합의 LCOH vs x)"));
+  cont.appendChild(containChart(b.grades,b.x));resbox.appendChild(cont);
+  const apply=elh("button",{class:"primary"},"↙ 이 설계를 대시보드에 반영");
+  apply.onclick=()=>{S.grades=b.grades.slice();S.x=b.x;S.tab="dash";render();};resbox.appendChild(apply);
+  const sav=elh("button",{class:"ghost"},"💾 시나리오로 저장");
+  sav.onclick=()=>{S.grades=b.grades.slice();S.x=b.x;saveScenario();};resbox.appendChild(sav);
+}
+function convChart(conv){
+  const W=560,H=200,m={l:56,r:16,t:14,b:34};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  const vals=conv.filter(c=>c[1]!=null);if(!vals.length)return s;
+  const xmax=conv[conv.length-1][0],ymin=Math.min(...vals.map(v=>v[1])),ymax=Math.max(...vals.map(v=>v[1]));
+  const X=v=>linmap(v,0,xmax,x0,x1),Y=v=>linmap(v,ymin*0.98,ymax*1.02,y0,y1);
+  els("line",{x1:x0,y1:y0,x2:x1,y2:y0,class:"baseline"},s);
+  [ymin,ymax].forEach(v=>els("text",{x:x0-6,y:Y(v)+3,"text-anchor":"end",class:"ax"},s).textContent=v.toFixed(1));
+  els("path",{d:"M"+vals.map(v=>X(v[0]).toFixed(1)+","+Y(v[1]).toFixed(1)).join("L"),fill:"none",stroke:"var(--opt)","stroke-width":2},s);
+  els("text",{x:(x0+x1)/2,y:H-4,"text-anchor":"middle",class:"axl"},s).textContent="누적 평가 조합 수";
+  els("text",{x:x1,y:y1+8,"text-anchor":"end",class:"dlabel"},s).textContent="best "+vals[vals.length-1][1].toFixed(2)+"원";
+  return s;
+}
+function containChart(grades,xstar){
+  const W=560,H=220,m={l:56,r:16,t:14,b:34};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  const xs=[];for(let x=1;x<=10;x+=0.1){const r=E.compute(grades,x,opt());xs.push([x,r.lcoh,r.npass]);}
+  const feas=xs.filter(p=>p[2]===11);const ymin=Math.min(...xs.map(p=>p[1])),ymax=Math.max(...xs.map(p=>p[1]));
+  const X=v=>linmap(v,1,10,x0,x1),Y=v=>linmap(v,ymin*0.97,ymax*1.03,y0,y1);
+  for(let x=1;x<=10;x++){els("text",{x:X(x),y:y0+14,"text-anchor":"middle",class:"ax"},s).textContent=x;}
+  // feasible region shading
+  if(feas.length){const fx=X(feas[0][0]);els("rect",{x:fx,y:y1,width:x1-fx,height:y0-y1,fill:"var(--pass)","fill-opacity":.06},s);
+    els("text",{x:fx+4,y:y1+12,class:"ax",fill:"var(--pass)"},s).textContent="F-C 11/11 영역 →";}
+  els("path",{d:"M"+xs.map(p=>X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join("L"),fill:"none",stroke:"var(--ink)","stroke-width":2},s);
+  els("circle",{cx:X(xstar),cy:Y(E.compute(grades,xstar,opt()).lcoh),r:5,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2},s);
+  els("text",{x:X(xstar),y:Y(E.compute(grades,xstar,opt()).lcoh)-9,"text-anchor":"middle",class:"dlabel"},s).textContent="x*="+xstar.toFixed(2);
+  els("text",{x:(x0+x1)/2,y:H-4,"text-anchor":"middle",class:"axl"},s).textContent="격납 배수 x → LCOH(원/kWh)";
+  return s;
+}
+
+// ============ TAB 4: SCENARIOS (basic) ============
+function saveScenario(){
+  const r=result();const name=prompt("시나리오 이름:", (S.penalty?"페널티ON":"페널티OFF")+" · SR"+S.grades.filter(g=>g==="SR").length);
+  if(!name)return;
+  S.scenarios.push({name,grades:S.grades.slice(),x:S.x,penalty:S.penalty,
+    lcoh:r.lcoh,npv:r.npv,irr:r.irr,avail:r.avail,npass:r.npass,note:""});
+  save();alert("저장됨: "+name);
+}
+function renderScen(p){
+  p.appendChild(elh("div",{class:"note"},"※ 시나리오 탭은 기본 기능만 구현(저장/비교/삭제). 순서조정·철학분석은 추후."));
+  if(!S.scenarios.length){p.appendChild(elh("div",{class:"panelcard"},"저장된 시나리오가 없습니다. 대시보드/최적화에서 '기록'을 누르세요."));return;}
+  const wrap=elh("div",{class:"tblwrap panelcard"});
+  let h="<table class='dt'><thead><tr><th>이름</th><th>SR/NSRST/NST</th><th>x</th><th>LCOH</th><th>NPV</th><th>IRR</th><th>가동률</th><th>FC</th><th></th></tr></thead><tbody>";
+  S.scenarios.forEach((sc,i)=>{const c={SR:0,NSRST:0,NST:0};sc.grades.forEach(g=>c[g]++);
+    h+=`<tr><td>${sc.name}</td><td>${c.SR}/${c.NSRST}/${c.NST}</td><td class='num'>${sc.x.toFixed(2)}</td><td class='num'>${sc.lcoh.toFixed(1)}</td><td class='num'>${fmt(sc.npv)}</td><td class='num'>${(sc.irr*100).toFixed(2)}%</td><td class='num'>${(sc.avail*100).toFixed(1)}%</td><td>${sc.npass}/11</td><td><button class='mini' data-load='${i}'>불러오기</button> <button class='mini' data-del='${i}'>삭제</button></td></tr>`;});
+  h+="</tbody></table>";wrap.innerHTML=h;p.appendChild(wrap);
+  wrap.querySelectorAll("[data-load]").forEach(b=>b.onclick=()=>{const sc=S.scenarios[+b.dataset.load];S.grades=sc.grades.slice();S.x=sc.x;S.penalty=sc.penalty;S.tab="dash";render();});
+  wrap.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.scenarios.splice(+b.dataset.del,1);save();render();});
+}
+
+// ============ TAB 5: OPTIONS ============
+function renderOptions(p){
+  const P=S.params;
+  p.appendChild(elh("div",{class:"note"},"가정값 조정 — 변경 시 전 탭 즉시 재계산. 각 항목의 <b>‘설명 ▾’</b>을 펼치면 뜻을 볼 수 있어요. 문제지 기본값에서 벗어난 값은 민감도/피칭용."));
+  const mk=(label,val,step,min,max,setter,unit,desc)=>{
+    const wrap=elh("div",{class:"oitem"});
+    const row=elh("div",{class:"orow"});row.appendChild(elh("label",{},label));
+    const inp=elh("input",{type:"number",value:val,step:step,min:min,max:max});
+    inp.onchange=()=>{setter(parseFloat(inp.value));render();};row.appendChild(inp);
+    if(unit)row.appendChild(elh("span",{class:"unit"},unit));
+    wrap.appendChild(row);
+    if(desc){const d=elh("details",{class:"odesc"});d.appendChild(elh("summary",{},"설명"));d.appendChild(elh("p",{class:"note"},desc));wrap.appendChild(d);}
+    return wrap;};
+  const card=(title)=>{const c=elh("div",{class:"panelcard"});c.appendChild(elh("div",{class:"cardh"},title));return c;};
+  const c1=card("등급별 가산율 (건설비 배수)");
+  c1.appendChild(mk("SR 가산율",P.grades.SR.ratio,0.5,5,10,v=>P.grades.SR.ratio=v,"× (5~10)","안전등급(SR)으로 지으면 건설비가 일반(NST) 대비 몇 배인지. 문제지 범위 5~10배. 클수록 SR 채택이 비싸짐."));
+  c1.appendChild(mk("NSRST 가산율",P.grades.NSRST.ratio,0.5,2,3,v=>P.grades.NSRST.ratio=v,"× (2~3)","특별관리등급(NSRST) 건설비 배수. 문제지 범위 2~3배."));
+  p.appendChild(c1);
+  const c2=card("등급별 고장빈도 (안전·가동률 영향)");
+  c2.appendChild(mk("SR 고장빈도",P.grades.SR.freq,1e-6,0,1,v=>P.grades.SR.freq=v,"회/년","그 등급 부품이 1년에 고장 날 기대 횟수. 낮을수록 안전·고신뢰. F-C 빈도와 정지일수에 직접 반영."));
+  c2.appendChild(mk("NSRST 고장빈도",P.grades.NSRST.freq,1e-4,0,1,v=>P.grades.NSRST.freq=v,"회/년","특별관리등급의 연간 고장 기대 횟수(기본 1e-3)."));
+  c2.appendChild(mk("NST 고장빈도",P.grades.NST.freq,1e-2,0,1,v=>P.grades.NST.freq=v,"회/년","일반등급의 연간 고장 기대 횟수(기본 1e-1, 즉 10년에 1번)."));
+  p.appendChild(c2);
+  const c5=card("격납건물 · 안전 모델");
+  c5.appendChild(mk("선량저감 지수 n",P.doseExp,0.5,0.5,4,v=>P.doseExp=v,"(선량 ÷ xⁿ)","격납건물 비용을 x배 쓰면 누출선량이 1/xⁿ로 줄어듦. 기본 n=2 → 1/x². n을 키우면 격납 투자 대비 안전이득이 커짐(수식 형태 자체를 바꿈)."));
+  p.appendChild(c5);
+  const c3=card("경제성 가정 (NPV/IRR)");
+  c3.appendChild(mk("할인율",P.disc,0.005,0,0.2,v=>P.disc=v,"(예 0.045)","미래의 돈을 현재가치로 깎는 비율. 높을수록 미래 수익을 박하게 봄. IRR이 이 값보다 크면 투자가치 있음."));
+  c3.appendChild(mk("상승률 (escalation)",P.esc,0.005,0,0.1,v=>P.esc=v,"(예 0.025)","열 판매가·운영비가 매년 오르는 비율(물가상승 등). NPV/IRR 현금흐름에 해마다 복리로 적용됨. LCOH에는 영향 없음."));
+  c3.appendChild(mk("열 판매단가",P.heatPrice,1,0,200,v=>P.heatPrice=v,"원/kWh","열을 kWh당 얼마에 파는지. 계약가 50원. LCOH가 이보다 낮아야 돈을 벌고, 현금흐름·IRR을 좌우."));
+  p.appendChild(c3);
+  const c4=card("신뢰도 가정 (열공급 계약)");
+  c4.appendChild(mk("정지 1일 판매손실",P.lossDay,1,0,1000,v=>P.lossDay=v,"백만원/일","고장으로 열공급이 하루 멈출 때 못 판 매출. 연매출 39,420 ÷ 365 = 108."));
+  c4.appendChild(mk("정지 1일 위약금",P.penDay,1,0,1000,v=>P.penDay=v,"백만원/일","공급 중단 시 계약상 하루당 물어주는 위약금(기본 100). 손실과 합쳐 정지 1일당 208."));
+  p.appendChild(c4);
+  const rst=elh("button",{class:"ghost"},"↺ 문제지 기본값 복원");
+  rst.onclick=()=>{S.params=E.defaults();render();};p.appendChild(rst);
+}
+
+render();
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change",render);
+</script>
