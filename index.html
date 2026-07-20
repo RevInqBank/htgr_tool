@@ -118,6 +118,7 @@ h4{font-size:13px}
 .csvta{width:100%;flex:1;min-height:280px;margin:10px 0;font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var(--ring);border-radius:8px;padding:10px;background:var(--page);color:var(--ink);white-space:pre;resize:vertical}
 .modalcard.sm{max-width:400px}
 .pinp{width:100%;padding:9px 11px;margin:10px 0;border:1px solid var(--ring);border-radius:8px;background:var(--page);color:var(--ink);font-family:inherit;font-size:14px}
+.chcap{font-size:12.5px;color:var(--ink2);margin:14px 0 6px;line-height:1.55}
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:300;background:var(--accent);color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);transition:opacity .35s}
 </style>
 <div class="top"><h1>🔥 HTGR 최적설계 툴</h1><div id="nav"></div>
@@ -324,14 +325,31 @@ function uiConfirm(msg,cb){uiModal((card,close)=>{
 });}
 
 // ---- state ----
+// 기본 내장 시나리오 (최초 실행 시 이미 존재). 등급은 S/R/N 압축표기, 기본 파라미터 기준 사전계산값.
+function decodeG(str){const m={S:"SR",R:"NSRST",N:"NST"};return str.split("").map(c=>m[c]);}
+function defEvent(name,gstr,x,pen,lic){return {name,grades:decodeG(gstr),x,penalty:pen,license:lic,params:E.defaults()};}
+function defaultScenarios(){return [
+  {name:"본선 5 후보안", events:[
+    defEvent("① SR없음·신뢰 미반영","RNNNRNNRNNRNR",1.6112,false,"✗"),
+    defEvent("② SR없음·신뢰 반영","RRRRRRRRRRRNR",1.6112,true,"✗"),
+    defEvent("③ 문제 예시(docx §6)","SSRNSNSRNNSSR",1.4143,true,"△"),
+    defEvent("④ 규제 SR 8개","SSSRSRSRRSSNS",1.0,true,"O"),
+    defEvent("⑤ ★회피 SR 5개(채택)","SSRRSRSRRRSRN",1.0,true,"O")]},
+  {name:"예선 서사", events:[
+    defEvent("all-NST 기준(문제)","NNNNNNNNNNNNN",1.0,true,"✗"),
+    defEvent("+ 고장 페널티 → NSRST","RRRRRRRRRRRNR",1.6112,true,"✗"),
+    defEvent("+ SR 5개 → 인허가 확보","SSRRSRSRRRSRN",1.0,true,"O")]},
+];}
 function freshState(){return{grades:Array(13).fill("NST"),locks:Array(13).fill(false),
   x:1.0, penalty:true, params:E.defaults(), tab:"dash", calcSub:"cost", scenarios:load(), activeScen:0};}
 let S=freshState();
 // 데이터 모델: 시나리오 = {name, events:[event,...]}, event = {name,grades,x,penalty,params,license}
-function load(){try{const d=JSON.parse(localStorage.getItem("htgr_scen")||"[]");
-  if(Array.isArray(d)&&d.length&&d[0]&&d[0].grades) return [{name:"내 시나리오",events:d}]; // 구버전(flat 이벤트) 마이그레이션
-  return Array.isArray(d)?d:[];
-}catch(e){return[];}}
+function load(){try{const raw=localStorage.getItem("htgr_scen");
+  if(raw===null) return defaultScenarios(); // 최초 실행 → 기본 시나리오 내장
+  const d=JSON.parse(raw);
+  if(Array.isArray(d)&&d.length&&d[0]&&d[0].grades) return [{name:"내 시나리오",events:d}]; // 구버전 마이그레이션
+  return (Array.isArray(d)&&d.length)?d:defaultScenarios();
+}catch(e){return defaultScenarios();}}
 function save(){try{localStorage.setItem("htgr_scen",JSON.stringify(S.scenarios));}catch(e){/* 저장 차단 시 무시 */}}
 function activeEvents(){ // 활성 시나리오의 이벤트 배열(없으면 생성)
   if(!S.scenarios.length){S.scenarios=[{name:"내 시나리오",events:[]}];S.activeScen=0;}
@@ -998,16 +1016,15 @@ function renderScen(p){
   S.scenarios.forEach((sc,i)=>{const b=elh("button",{class:"subbtn"+(i===S.activeScen?" active":"")},sc.name+" ("+((sc.events||[]).length)+")");b.onclick=()=>{S.activeScen=i;render();};scbar.appendChild(b);});
   const addS=elh("button",{class:"subbtn"},"＋ 새 시나리오");addS.onclick=()=>newScenario();scbar.appendChild(addS);
   p.appendChild(scbar);
-  // 관리 버튼
+  // 관리 버튼 (단순화)
   const top=elh("div",{class:"btnrow"});
-  const sv=elh("button",{class:"primary"},"💾 현재 대시보드 설계를 이벤트로 추가");sv.onclick=()=>saveEvent();
+  const sv=elh("button",{class:"primary"},"💾 대시보드 설계를 이벤트로 추가");sv.onclick=()=>saveEvent();
   const rnS=elh("button",{class:"ghost"},"✎ 시나리오 이름");rnS.onclick=()=>uiPrompt("시나리오 이름:",S.scenarios[S.activeScen].name,n=>{S.scenarios[S.activeScen].name=n;save();render();});
   const delS=elh("button",{class:"ghost"},"🗑 이 시나리오 삭제");delS.onclick=()=>uiConfirm("시나리오 '"+S.scenarios[S.activeScen].name+"'을(를) 삭제할까요?",()=>{S.scenarios.splice(S.activeScen,1);S.activeScen=0;save();render();});
-  const b1=elh("button",{class:"ghost"},"📖 예선 서사(새 시나리오)");b1.onclick=()=>loadStory("narr");
-  const b2=elh("button",{class:"ghost"},"🏆 본선 5후보안(새 시나리오)");b2.onclick=()=>loadStory("cand");
-  [sv,rnS,delS,b1,b2].forEach(b=>top.appendChild(b));p.appendChild(top);
+  const rst=elh("button",{class:"ghost"},"↺ 기본 시나리오 복원");rst.onclick=()=>uiConfirm("기본 시나리오(예선 서사·본선 5후보안)를 목록에 다시 추가할까요?",()=>{defaultScenarios().forEach(sc=>S.scenarios.push(sc));save();render();});
+  [sv,rnS,delS,rst].forEach(b=>top.appendChild(b));p.appendChild(top);
   const evs=activeEvents();
-  if(!evs.length){p.appendChild(elh("div",{class:"panelcard"},"이 시나리오에 이벤트가 없습니다. 대시보드에서 설계를 만들어 '이벤트로 추가'하거나, 위의 기본 로더(예선 서사·본선 5후보안)를 눌러보세요."));return;}
+  if(!evs.length){p.appendChild(elh("div",{class:"panelcard"},"이 시나리오엔 이벤트가 없습니다. 대시보드에서 설계를 만들어 '이벤트로 추가'를 누르세요. (지웠던 기본 시나리오는 '기본 시나리오 복원'으로 되돌릴 수 있습니다.)"));return;}
   const rows=evs.map(ev=>({sc:ev,r:E.compute(ev.grades,ev.x,scState(ev))}));
   const bestL=Math.min(...rows.map(x=>x.r.lcoh)), bestI=Math.max(...rows.map(x=>x.r.irr));
   // ---- 4축 비교표 (PPT Slide16) ----
@@ -1029,18 +1046,21 @@ function renderScen(p){
   p.appendChild(elh("div",{class:"note"},"안전=F-C 11/11 통과 · 신뢰=고장 페널티 반영 여부 · 인허가=규제상 SR 강제 대응(직접 판단, 칸 클릭으로 전환). 초록 굵은 값=최저 LCOH·최고 IRR."));
   // ---- 진화 플롯 (경제성 LCOH·IRR + 안전여유) ----
   const acc="var(--accent)",gp="var(--pass)",fl="var(--fail)",mut="var(--muted)";
-  const eco=elh("div",{class:"panelcard"});eco.appendChild(elh("div",{class:"cardh"},"경제성 진화 (순서대로)"));
-  eco.appendChild(elh("p",{class:"note"},"LCOH는 원가분해(건설·O&M·고장페널티) 스택으로, IRR은 점을 선으로 이어 추세를 봅니다."));
+  const cap=(t)=>elh("p",{class:"chcap"},t);
+  const eco=elh("div",{class:"panelcard"});eco.appendChild(elh("div",{class:"cardh"},"💰 경제성 진화 — 이벤트를 지날수록 원가·수익이 어떻게 변하나"));
+  eco.appendChild(cap("<b>① 열 판매원가(LCOH) 분해</b> — 각 이벤트의 kWh당 원가를 <b>건설비·운영비(O&M)·고장페널티</b>로 쪼갠 것. 막대가 낮을수록 싸고, <b>판매가 50원 선 아래면 흑자</b>."));
   eco.appendChild(scenStackLCOH(rows));
-  eco.appendChild(elh("p",{class:"note"},"※ 고장페널티(주황)는 <b>고등급 설계일수록 거의 0(≈0.1~0.3원)</b>이라 위 막대에선 안 보입니다 — 고장이 드물다는 뜻(정상). 아래에 자체 스케일로 확대:"));
-  eco.appendChild(scenBars(rows,row=>row.r.lcohFp,"고장 페널티만 확대 (원/kWh) — 낮을수록 좋음",
+  eco.appendChild(cap("<b>② 고장페널티만 확대</b> — 위 막대에선 안 보이는 고장 손실분만 따로. <b>고등급 설계일수록 ≈0</b>(고장이 드물다는 뜻)이라 자체 스케일로 확대해 표시."));
+  eco.appendChild(scenBars(rows,row=>row.r.lcohFp,"고장 페널티 (원/kWh) — 낮을수록 좋음",
     {lab:v=>v.toFixed(3),color:(row,v,vals)=>v===Math.max(...vals)?fl:acc}));
-  eco.appendChild(scenLine(rows,row=>row.r.irr*100,"IRR (%) — 점·선, 높을수록 좋음",
+  eco.appendChild(cap("<b>③ 투자수익률(IRR)</b> — 이 사업의 연 수익률. 점을 이어 이벤트 간 추세를 봄. <b>할인율(4.5%) 선보다 위면 투자가치 있음</b>."));
+  eco.appendChild(scenLine(rows,row=>row.r.irr*100,"IRR (%) — 높을수록 좋음",
     {thresh:S.params.disc*100,threshLabel:"할인율 "+(S.params.disc*100).toFixed(1)+"%"}));
   p.appendChild(eco);
-  const saf=elh("div",{class:"panelcard"});saf.appendChild(elh("div",{class:"cardh"},"안전성 진화 — F-C 커브 나란히 + 안전여유"));
-  saf.appendChild(elh("p",{class:"note"},"각 시나리오의 F-C를 가로로 나열해 한눈에 비교(점이 모두 곡선 아래=초록이면 통과, 좌우 스크롤). 아래엔 <b>최소 안전여유</b>(가장 아슬아슬한 사고가 허용선 대비 몇 배 여유, 1×=딱 통과)로 정량 비교."));
+  const saf=elh("div",{class:"panelcard"});saf.appendChild(elh("div",{class:"cardh"},"🛡️ 안전성 진화 — 이벤트별 사고 안전성 비교"));
+  saf.appendChild(cap("<b>① F-C 커브 나란히</b> — 각 이벤트의 사고 11개 위치. <b>모두 목표곡선 아래(초록)면 안전 통과</b>. 좌우로 스크롤해 비교."));
   saf.appendChild(scenFCrow(rows));
+  saf.appendChild(cap("<b>② 최소 안전여유</b> — 각 이벤트에서 <b>가장 아슬아슬한 사고가 안전선 대비 몇 배 여유</b>인지. <b>1×=딱 통과</b>, 높을수록 든든함. (모두 통과라 O만으론 우열이 안 보이므로)"));
   saf.appendChild(scenBars(rows,row=>minMargin(row.r),"최소 안전여유 (× 배수) — 높을수록 안전",
     {thresh:1,threshLabel:"합격선 1×",axfmt:v=>v.toFixed(1),lab:v=>"×"+v.toFixed(1),
      color:(row,v,vals)=>v<1?fl:(v===Math.max(...vals)?gp:acc)}));
