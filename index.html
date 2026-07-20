@@ -170,7 +170,7 @@ function defaults(){return{
  containBase:22550, remCapex:125700,
  opexCash:24462, deprec:4077, opexTotal:28539,          // 감가상각 분리(이중계산 방지)
  heatPrice:50, annualHeat:788400, lossDay:108, penDay:100,
- constrYears:10, opYears:60, disc:0.045, esc:0.025, doseExp:2, baseCF:1.0 };}
+ constrYears:10, opYears:60, disc:0.045, esc:0.045, doseExp:2, baseCF:1.0 };}
 
 function fcDose(f){ // 목표곡선 허용선량[REM] at 빈도 f
  if(f>0.1)return 0.1/f; if(f>0.01)return 1;
@@ -439,9 +439,8 @@ function kpiRow(r){
   row.appendChild(kpi(r.npass+" / 11", "안전 F-C", safe?"good":"bad", safe?"✓ 통과":"✗ "+(11-r.npass)+"개 초과"));
   const under=r.lcoh<=S.params.heatPrice;
   row.appendChild(kpi(r.lcoh.toFixed(1)+"원", "LCOH (열 판매원가)", under?"good":"bad", "판매가 "+S.params.heatPrice+"원/kWh"));
+  row.appendChild(kpi(fmt(r.npv), "NPV", r.npv>=0?"good":"bad", "백만원 (할인율 "+(S.params.disc*100)+"%)"));
   row.appendChild(kpi((r.irr*100).toFixed(2)+"%", "IRR", r.irr>=S.params.disc?"good":"bad", "할인율 "+(S.params.disc*100)+"%"));
-  row.appendChild(kpi(fmt(r.capex), "총사업비 CAPEX", "", "백만원"));
-  row.appendChild(kpi(fmt(r.annualCost), "연간 총비용", "", "O&M+할인자본비"+(S.penalty?"+손실":"")));
   row.appendChild(kpi((r.avail*100).toFixed(1)+"%", "등가 가동률", "", S.penalty?"정지 "+r.downtime.toFixed(1)+"일/년":"기본 이용률 "+(S.params.baseCF*100).toFixed(0)+"%"));
   return row;
 }
@@ -1117,15 +1116,16 @@ function renderScen(p){
   const evs=activeEvents();
   if(!evs.length){p.appendChild(elh("div",{class:"panelcard"},"이 시나리오엔 이벤트가 없습니다. 대시보드에서 설계를 만들어 '이벤트로 추가'를 누르세요. (기본 시나리오로 되돌리려면 '초기화'.)"));return;}
   const rows=evs.map(ev=>({sc:ev,r:E.compute(ev.grades,ev.x,scState(ev))}));
-  const bestL=Math.min(...rows.map(x=>x.r.lcoh)), bestI=Math.max(...rows.map(x=>x.r.irr));
+  const bestL=Math.min(...rows.map(x=>x.r.lcoh)), bestI=Math.max(...rows.map(x=>x.r.irr)), bestN=Math.max(...rows.map(x=>x.r.npv));
   // ---- 4축 비교표 (PPT Slide16) ----
   const wrap=elh("div",{class:"tblwrap panelcard"});
   wrap.appendChild(elh("div",{class:"cardh"},"["+S.scenarios[S.activeScen].name+"] 이벤트 비교 — 4축 (경제·안전·신뢰·인허가)"));
-  let h="<table class='dt'><thead><tr><th>#</th><th>이름</th><th>LCOH<br>(원/kWh)</th><th>IRR</th><th>안전</th><th>신뢰</th><th>인허가</th><th>SR/NSRST/NST</th><th>격납x</th><th>가동률</th><th>관리</th></tr></thead><tbody>";
+  let h="<table class='dt'><thead><tr><th>#</th><th>이름</th><th>LCOH<br>(원/kWh)</th><th>NPV<br>(백만원)</th><th>IRR</th><th>안전</th><th>신뢰</th><th>인허가</th><th>SR/NSRST/NST</th><th>격납x</th><th>가동률</th><th>관리</th></tr></thead><tbody>";
   rows.forEach(({sc,r},i)=>{const c={SR:0,NSRST:0,NST:0};sc.grades.forEach(g=>c[g]++);const safe=r.npass===11;
     const lic=sc.license||"△";const licCol=lic==="O"?"var(--pass)":lic==="✗"?"var(--fail)":"var(--muted)";
     h+=`<tr><td>${i+1}</td><td>${sc.name}</td>`
       +`<td class='num' style='${r.lcoh===bestL?"font-weight:700;color:var(--pass)":""}'>${r.lcoh.toFixed(1)}</td>`
+      +`<td class='num' style='${r.npv===bestN?"font-weight:700;color:var(--pass)":(r.npv<0?"color:var(--fail)":"")}'>${fmt(r.npv)}</td>`
       +`<td class='num' style='${r.irr===bestI?"font-weight:700;color:var(--pass)":""}'>${(r.irr*100).toFixed(2)}%</td>`
       +`<td style='color:${safe?"var(--pass)":"var(--fail)"}'>${safe?"O":"✗"}</td>`
       +`<td style='color:${sc.penalty?"var(--pass)":"var(--fail)"}'>${sc.penalty?"O":"✗"}</td>`
@@ -1134,7 +1134,7 @@ function renderScen(p){
       +`<td class='num'>${sc.x.toFixed(2)}</td><td class='num'>${(r.avail*100).toFixed(1)}%</td>`
       +`<td style='white-space:nowrap'><button class='mini' data-up='${i}' ${i===0?"disabled":""}>▲</button><button class='mini' data-dn='${i}' ${i===rows.length-1?"disabled":""}>▼</button><button class='mini' data-rn='${i}'>✎</button><button class='mini' data-load='${i}'>불러오기</button><button class='mini' data-del='${i}'>✕</button></td></tr>`;});
   h+="</tbody></table>";wrap.innerHTML+=h;p.appendChild(wrap);
-  p.appendChild(elh("div",{class:"note"},"안전=F-C 11/11 통과 · 신뢰=고장 페널티 반영 여부 · 인허가=규제상 SR 강제 대응(직접 판단, 칸 클릭으로 전환). 초록 굵은 값=최저 LCOH·최고 IRR."));
+  p.appendChild(elh("div",{class:"note"},"안전=F-C 11/11 통과 · 신뢰=고장 페널티 반영 여부 · 인허가=규제상 SR 강제 대응(직접 판단, 칸 클릭으로 전환). 초록 굵은 값=최저 LCOH·최고 NPV·최고 IRR (NPV 음수는 빨강)."));
   // ---- 진화 플롯 (경제성 LCOH·IRR + 안전여유) ----
   const acc="var(--accent)",gp="var(--pass)",fl="var(--fail)",mut="var(--muted)";
   const cap=(t)=>elh("p",{class:"chcap"},t);
@@ -1198,7 +1198,7 @@ function renderOptions(p){
   p.appendChild(c5);
   const c3=card("경제성 가정 (NPV/IRR)");
   c3.appendChild(mk("할인율",P.disc,0.005,0,0.2,v=>P.disc=v,"(예 0.045)","미래의 돈을 현재가치로 깎는 비율. 높을수록 미래 수익을 박하게 봄. IRR이 이 값보다 크면 투자가치 있음."));
-  c3.appendChild(mk("상승률 (escalation)",P.esc,0.005,0,0.1,v=>P.esc=v,"(예 0.025)","열 판매가·운영비가 매년 오르는 비율(물가상승 등). NPV/IRR 현금흐름에 해마다 복리로 적용됨. LCOH에는 영향 없음."));
+  c3.appendChild(mk("상승률 (escalation)",P.esc,0.005,0,0.1,v=>P.esc=v,"(예 0.045)","열 판매가·운영비가 매년 오르는 비율(물가상승 등). NPV/IRR 현금흐름에 해마다 복리로 적용됨. 기본값은 할인율과 동일(4.5%)로 두어 실질할인율=0 → LCOH가 문제지 정의(무할인)와 일치. LCOH에는 영향 없음."));
   c3.appendChild(mk("열 판매단가",P.heatPrice,1,0,200,v=>P.heatPrice=v,"원/kWh","열을 kWh당 얼마에 파는지. 계약가 50원. LCOH가 이보다 낮아야 돈을 벌고, 현금흐름·IRR을 좌우."));
   p.appendChild(c3);
   const c4=card("신뢰도 가정 (열공급 계약)");
