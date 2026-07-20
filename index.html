@@ -972,7 +972,7 @@ function analyzeScenario(sc){
     const {ev,r}=rows[0],c=cnt(ev.grades);
     h+=`<p><b>${sc.name}</b> · 단일 설계 '${ev.name}' 분석</p><ul style="font-size:13px;line-height:1.85">`;
     h+=`<li><b>등급 구성</b>: SR ${c.SR}·NSRST ${c.NSRST}·NST ${c.NST} → ${gradePhilosophy(c)}.</li>`;
-    h+=`<li><b>안전(F-C)</b>: ${r.npass}/11 ${r.npass===11?"통과 · 최소 안전여유 ×"+minMargin(r).toFixed(1)+" (1×=딱 통과)":"— "+(11-r.npass)+"개 초과"}.</li>`;
+    h+=`<li><b>안전(F-C)</b>: ${r.npass}/11 ${r.npass===11?"통과 · 여유배수 ×"+minMargin(r).toFixed(1)+" (선량이 그만큼 커져도 통과, ×1=딱 걸침)":"— "+(11-r.npass)+"개 초과"}.</li>`;
     h+=`<li><b>원가(LCOH)</b>: ${r.lcoh.toFixed(1)}원/kWh, 지배 항목은 <b>${domCost(r)}</b>. 판매가 ${price}원 대비 <b>${r.lcoh<=price?"흑자":"적자"}</b>.</li>`;
     h+=`<li><b>투자</b>: IRR ${(r.irr*100).toFixed(2)}% (${verdict(r)}), 등가 가동률 ${(r.avail*100).toFixed(1)}%.</li>`;
     h+=`<li><b>제언</b>: ${suggest(r,c)}</li></ul>`;
@@ -1153,9 +1153,9 @@ function renderScen(p){
   saf.appendChild(scenFCrow(rows));
   saf.appendChild(cap("<b>② 입력 변천사</b> — 위 각 F-C가 <b>어떤 설계 변수(등급·격납·페널티)</b>로 나왔는지. 열=이벤트, 색=등급(<span class='gtag g-SR'>S</span> 진할수록 고등급). 이벤트를 지날수록 어느 기기가 승급하는지 보입니다."));
   saf.appendChild(scenInputMatrix(rows));
-  saf.appendChild(cap("<b>③ 최소 안전여유</b> — 각 이벤트에서 <b>가장 아슬아슬한 사고가 안전선 대비 몇 배 여유</b>인지. <b>1×=딱 통과</b>, 높을수록 든든함. (모두 통과라 O만으론 우열이 안 보이므로)"));
-  saf.appendChild(scenBars(rows,row=>minMargin(row.r),"최소 안전여유 (× 배수) — 높을수록 안전",
-    {thresh:1,threshLabel:"합격선 1×",axfmt:v=>v.toFixed(1),lab:v=>"×"+v.toFixed(1),
+  saf.appendChild(cap("<b>③ 안전 여유배수 = 허용선량 ÷ 실제선량</b> (가장 아슬아슬한 사고 기준) — 쉽게 말해 <b>사고 선량이 몇 배 더 커져도 여전히 통과</b>하는가. <b>×1 = 딱 통과(여유 0)</b>, ×5면 선량이 5배 악화돼도 안전. 선량 범위가 수십만 배라 뺄셈(0 기준) 대신 배수로 비교."));
+  saf.appendChild(scenBars(rows,row=>minMargin(row.r),"안전 여유배수 (허용÷실제) — 클수록 안전, ×1=딱 통과",
+    {thresh:1,threshLabel:"×1 딱 통과(여유0)",axfmt:v=>v.toFixed(1),lab:v=>"×"+v.toFixed(1),
      color:(row,v,vals)=>v<1?fl:(v===Math.max(...vals)?gp:acc)}));
   p.appendChild(saf);
   // handlers (활성 시나리오의 이벤트 배열 evs 조작)
