@@ -351,11 +351,18 @@ function freshState(){const sc=load();
   x:1.0, penalty:true, params:E.defaults(), tab:"dash", calcSub:"cost", scenarios:sc, activeScen:myIdx(sc)};}
 let S=freshState();
 // 데이터 모델: 시나리오 = {name, events:[event,...]}, event = {name,grades,x,penalty,params,license}
+const DEFAULT_SCEN_NAMES=["본선 5 후보안","예선 서사"];
+// 내장 기본 시나리오는 옛 localStorage에 굳은 params(예 esc 2.5%)를 현재 기본값으로 새로고침.
+// (설계 등급/격납/페널티는 보존, 경제 가정 params만 최신화 — 사용자 커스텀 시나리오는 손대지 않음)
+function migrateDefaults(list){ if(!Array.isArray(list))return list;
+  list.forEach(sc=>{ if(sc&&DEFAULT_SCEN_NAMES.indexOf(sc.name)>=0&&Array.isArray(sc.events))
+    sc.events.forEach(ev=>{ ev.params=E.defaults(); }); });
+  return list; }
 function load(){try{const raw=localStorage.getItem("htgr_scen");
   if(raw===null) return defaultScenarios(); // 최초 실행 → 기본 시나리오 내장
   const d=JSON.parse(raw);
   if(Array.isArray(d)&&d.length&&d[0]&&d[0].grades) return [{name:"내 시나리오",events:d}]; // 구버전 마이그레이션
-  return (Array.isArray(d)&&d.length)?d:defaultScenarios();
+  return (Array.isArray(d)&&d.length)?migrateDefaults(d):defaultScenarios();
 }catch(e){return defaultScenarios();}}
 function save(){try{localStorage.setItem("htgr_scen",JSON.stringify(S.scenarios));}catch(e){/* 저장 차단 시 무시 */}}
 function activeEvents(){ // 활성 시나리오의 이벤트 배열(없으면 생성)
