@@ -116,6 +116,9 @@ h4{font-size:13px}
 .modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
 .modalcard{background:var(--surface);border:1px solid var(--ring);border-radius:14px;padding:18px;max-width:640px;width:100%;max-height:86vh;display:flex;flex-direction:column}
 .csvta{width:100%;flex:1;min-height:280px;margin:10px 0;font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var(--ring);border-radius:8px;padding:10px;background:var(--page);color:var(--ink);white-space:pre;resize:vertical}
+.modalcard.sm{max-width:400px}
+.pinp{width:100%;padding:9px 11px;margin:10px 0;border:1px solid var(--ring);border-radius:8px;background:var(--page);color:var(--ink);font-family:inherit;font-size:14px}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:300;background:var(--accent);color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);transition:opacity .35s}
 </style>
 <div class="top"><h1>🔥 HTGR 최적설계 툴</h1><div id="nav"></div>
 <span id="pstate" class="pchip"></span>
@@ -162,13 +165,23 @@ function defaults(){return{
  containBase:22550, remCapex:125700,
  opexCash:24462, deprec:4077, opexTotal:28539,          // 감가상각 분리(이중계산 방지)
  heatPrice:50, annualHeat:788400, lossDay:108, penDay:100,
- constrYears:10, opYears:60, disc:0.045, esc:0.025, doseExp:2 };}
+ constrYears:10, opYears:60, disc:0.045, esc:0.025, doseExp:2, baseCF:1.0 };}
 
 function fcDose(f){ // 목표곡선 허용선량[REM] at 빈도 f
  if(f>0.1)return 0.1/f; if(f>0.01)return 1;
  if(f>1e-4)return 0.04*Math.pow(f,-0.699);
  if(f>=5e-7)return 25*Math.pow(f/1e-4,-0.642); return Infinity; }
 
+// 할인 LCOH의 capex 연환산 계수 = NPV(건설비 스트림)/NPV(에너지 스트림).
+// 에너지 할인계수합이 모든 설계 공통이라, 이 계수 하나로 축약됨. 실질할인율 rr=(1+disc)/(1+esc)-1.
+function capexFactor(P){
+ const rr=(1+P.disc)/(1+P.esc)-1;
+ if(Math.abs(rr)<1e-9) return 1/P.opYears;
+ let A=0,K=0;
+ for(let t=1;t<=P.constrYears;t++)A+=(1/P.constrYears)/Math.pow(1+rr,t);
+ for(let t=P.constrYears+1;t<=P.constrYears+P.opYears;t++)K+=1/Math.pow(1+rr,t);
+ return A/K;
+}
 function scenFreq(grades,s,G){
  const idx=s[5];
  if(s[3]==="single")return G[grades[idx[0]]].freq;
@@ -189,11 +202,13 @@ function compute(grades,x,opt){
  let downtime=0,outEvents=0; for(let i=0;i<13;i++){downtime+=G[grades[i]].freq*C[i][2];outEvents+=G[grades[i]].freq;}
  const availTrue=(365-downtime)/365, lossTrue=downtime*(P.lossDay+P.penDay);
  const on=!!opt.penalty;
- const avail=on?availTrue:1, loss=on?lossTrue:0, pen=on?downtime*P.penDay:0;
- const supply=P.annualHeat*avail*1000; // kWh/년
- const lcohCon=(capex/P.opYears)*1e6/supply, lcohOm=P.opexCash*1e6/supply, lcohFp=loss*1e6/supply;
- const lcoh=lcohCon+lcohOm+lcohFp;
- const annualCost=P.opexCash+capex/P.opYears+loss; // LCOH 분자(백만원/년)=연간총비용
+ const bcf=(P.baseCF!=null?P.baseCF:1);           // 기본 이용률(계획정지 등, 고장과 별개)
+ const avail=bcf*(on?availTrue:1), loss=on?lossTrue:0, pen=on?downtime*P.penDay:0;
+ const supply=P.annualHeat*avail*1000; // kWh/년 (실제 공급 = 계약열량 × 기본이용률 × 고장가동률)
+ const cfac=capexFactor(P);                        // 할인 자본비 연환산 계수 (구 1/60 대체)
+ const lcohCon=(capex*cfac)*1e6/supply, lcohOm=P.opexCash*1e6/supply, lcohFp=loss*1e6/supply;
+ const lcoh=lcohCon+lcohOm+lcohFp;                 // 할인 LCOH = NPV(비용)/NPV(에너지), 판매가 손익분기 단가
+ const annualCost=P.opexCash+capex*cfac+loss;      // LCOH 분자(백만원/년, 할인 연환산)
  const rev0=supply*P.heatPrice/1e6; // 백만원/년
  const NY=P.constrYears+P.opYears;
  const cf=yr=>yr<=P.constrYears? -capex/P.constrYears : (rev0-P.opexCash-pen)*Math.pow(1+P.esc,yr-P.constrYears-1);
@@ -218,7 +233,7 @@ function minContainX(grades,opt){
 }
 
 // LCOH만 싸게 계산(최적화 내부용, IRR/현금흐름 생략). x_min 동시 산출.
-function evalLcohCheap(g,P,G,penalty){
+function evalLcohCheap(g,P,G,penalty,cfac){
  let xmin=1; const ex=P.doseExp||2;
  for(const s of SCEN){const f=scenFreq(g,s,G),allowed=fcDose(f),d1=s[4]/10;
    if(d1>allowed){const need=Math.pow(d1/allowed,1/ex);if(need>xmin)xmin=need;}}
@@ -226,16 +241,16 @@ function evalLcohCheap(g,P,G,penalty){
  let capex=P.remCapex+P.containBase*xmin;
  for(let i=0;i<13;i++)capex+=C[i][1]*G[g[i]].ratio;
  let downtime=0;for(let i=0;i<13;i++)downtime+=G[g[i]].freq*C[i][2];
- const avail=penalty?(365-downtime)/365:1, loss=penalty?downtime*(P.lossDay+P.penDay):0;
+ const avail=(P.baseCF!=null?P.baseCF:1)*(penalty?(365-downtime)/365:1), loss=penalty?downtime*(P.lossDay+P.penDay):0;
  const supply=P.annualHeat*avail*1000;
- const lcoh=(capex/P.opYears+P.opexCash+loss)*1e6/supply;
+ const lcoh=(capex*cfac+P.opexCash+loss)*1e6/supply;
  return {lcoh,x:xmin};
 }
 
 // 최적화: locked(index->grade) 고정, 나머지 전수전개. penalty 반영 LCOH 최소.
 // 청크 실행(브라우저 rAF) — 각 조합은 LCOH만 계산(빠름). best만 최종 full compute.
 function makeOptimizer(locked,opt){
- const P=opt.params,G=P.grades,penalty=!!opt.penalty;
+ const P=opt.params,G=P.grades,penalty=!!opt.penalty,cfac=capexFactor(P);
  const free=[]; for(let i=0;i<13;i++) if(!(i in locked)) free.push(i);
  const total=Math.pow(3,free.length);
  const GN=["SR","NSRST","NST"];
@@ -244,7 +259,7 @@ function makeOptimizer(locked,opt){
  function evalCombo(n){
    const g=base; let t=n;
    for(const fi of free){ g[fi]=GN[t%3]; t=(t/3)|0; }
-   const r=evalLcohCheap(g,P,G,penalty);
+   const r=evalLcohCheap(g,P,G,penalty,cfac);
    if(r){ feasible++; if(!best||r.lcoh<best.lcoh) best={grades:g.slice(),x:r.x,lcoh:r.lcoh}; }
  }
  return {
@@ -263,7 +278,7 @@ function makeOptimizer(locked,opt){
  };
 }
 
-const API={C,CI,SCEN,defaults,fcDose,compute,minContainX,makeOptimizer,
+const API={C,CI,SCEN,defaults,fcDose,capexFactor,compute,minContainX,makeOptimizer,
  allGrades:g=>Array(13).fill(g)};
 if(typeof module!=="undefined"&&module.exports)module.exports=API;
 root.ENGINE=API;
@@ -287,6 +302,26 @@ function showTip(html,ev){const t=tipEl();t.innerHTML=html;t.style.display="bloc
   const y=ev.touches&&ev.touches[0]?ev.touches[0].clientY:ev.clientY;
   const w=t.offsetWidth||220;t.style.left=Math.max(8,Math.min(x+14,window.innerWidth-w-8))+"px";t.style.top=(y+14)+"px";}
 function hideTip(){const t=document.getElementById("tip");if(t)t.style.display="none";}
+// ---- 커스텀 모달/토스트 (샌드박스가 prompt/confirm/alert 차단하므로 자체 구현) ----
+function toast(msg){const t=elh("div",{class:"toast"},msg);document.body.appendChild(t);setTimeout(()=>{t.style.opacity="0";},1800);setTimeout(()=>t.remove(),2200);}
+function uiModal(build){const ov=elh("div",{class:"modal"});const card=elh("div",{class:"modalcard sm"});build(card,()=>ov.remove());ov.appendChild(card);ov.onclick=e=>{if(e.target===ov)ov.remove();};document.body.appendChild(ov);return ov;}
+function uiPrompt(label,def,cb){uiModal((card,close)=>{
+  card.appendChild(elh("div",{class:"cardh"},label));
+  const inp=elh("input",{type:"text",class:"pinp"});inp.value=def||"";card.appendChild(inp);
+  const br=elh("div",{class:"btnrow"});
+  const ok=elh("button",{class:"primary"},"확인");ok.onclick=()=>{const v=(inp.value||"").trim();close();if(v)cb(v);};
+  const no=elh("button",{class:"ghost"},"취소");no.onclick=close;
+  br.appendChild(ok);br.appendChild(no);card.appendChild(br);
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter")ok.onclick();});
+  setTimeout(()=>{try{inp.focus();inp.select();}catch(e){}},30);
+});}
+function uiConfirm(msg,cb){uiModal((card,close)=>{
+  card.appendChild(elh("p",{class:"note",style:"font-size:13.5px"},msg));
+  const br=elh("div",{class:"btnrow"});
+  const ok=elh("button",{class:"primary"},"확인");ok.onclick=()=>{close();cb();};
+  const no=elh("button",{class:"ghost"},"취소");no.onclick=close;
+  br.appendChild(ok);br.appendChild(no);card.appendChild(br);
+});}
 
 // ---- state ----
 function freshState(){return{grades:Array(13).fill("NST"),locks:Array(13).fill(false),
@@ -371,8 +406,8 @@ function kpiRow(r){
   row.appendChild(kpi(r.lcoh.toFixed(1)+"원", "LCOH (열 판매원가)", under?"good":"bad", "판매가 "+S.params.heatPrice+"원/kWh"));
   row.appendChild(kpi((r.irr*100).toFixed(2)+"%", "IRR", r.irr>=S.params.disc?"good":"bad", "할인율 "+(S.params.disc*100)+"%"));
   row.appendChild(kpi(fmt(r.capex), "총사업비 CAPEX", "", "백만원"));
-  row.appendChild(kpi(fmt(r.annualCost), "연간 총비용", "", "O&M+CAPEX/60"+(S.penalty?"+손실":"")));
-  row.appendChild(kpi((r.avail*100).toFixed(1)+"%", "등가 가동률", "", S.penalty?"정지 "+r.downtime.toFixed(1)+"일/년":"페널티 OFF"));
+  row.appendChild(kpi(fmt(r.annualCost), "연간 총비용", "", "O&M+할인자본비"+(S.penalty?"+손실":"")));
+  row.appendChild(kpi((r.avail*100).toFixed(1)+"%", "등가 가동률", "", S.penalty?"정지 "+r.downtime.toFixed(1)+"일/년":"기본 이용률 "+(S.params.baseCF*100).toFixed(0)+"%"));
   return row;
 }
 function kpi(v,l,cls,sub){return elh("div",{class:"kpi "+cls},`<div class="kv">${v}</div><div class="kl">${l}</div><div class="ks">${sub||""}</div>`);}
@@ -417,8 +452,8 @@ function penaltyBanner(r){
   const on=S.penalty;
   const b=elh("div",{class:"pbanner "+(on?"on":"off")});
   b.innerHTML=on
-    ? `<b>신뢰도 페널티 ON</b> — 기대 정지 <b>${r.downtime.toFixed(1)}일/년</b> · 연간 손실 <b>${fmt(r.loss)}</b>백만원 → LCOH에 <b>+${r.lcohFp.toFixed(1)}원</b> 반영. (가동률 ${(r.avail*100).toFixed(1)}%)`
-    : `<b>신뢰도 페널티 OFF</b> — 고장 무시(가동률 100% 가정). LCOH·현금흐름에 정지손실 미반영.`;
+    ? `<b>신뢰도 페널티 ON</b> — 기대 정지 <b>${r.downtime.toFixed(1)}일/년</b> · 연간 손실 <b>${fmt(r.loss)}</b>백만원 → LCOH에 <b>+${r.lcohFp.toFixed(1)}원</b> 반영. (실제 가동률 ${(r.avail*100).toFixed(1)}%${S.params.baseCF<1?", 기본 이용률 "+(S.params.baseCF*100).toFixed(0)+"% 포함":""})`
+    : `<b>신뢰도 페널티 OFF</b> — 고장 무시. 가동률 = 기본 이용률 <b>${(S.params.baseCF*100).toFixed(0)}%</b>. LCOH·현금흐름에 정지손실 미반영.`;
   const t=elh("button",{class:"tgl "+(on?"on":"")},"페널티 "+(on?"끄기 →OFF":"켜기 →ON"));
   t.onclick=()=>{S.penalty=!S.penalty;render();};b.appendChild(t);
   return b;
@@ -458,7 +493,7 @@ function flowSVG(r){
     ["등급 → 건설비\n(1배가 × 등급배수)","proc"],
     ["CAPEX 합산\n(부품 + 격납 + 고정분)","proc"],
     ["고장 → 정지일수\n· 가동률 · 손실","proc"],
-    ["LCOH =\n(O&M + CAPEX/60 + 손실) ÷ 열량","proc"],
+    ["LCOH(할인) =\nNPV(비용) ÷ NPV(에너지)","proc"],
     ["60년 현금흐름\n→ NPV · IRR","proc"]];
   const nh=(t,sh)=>{const n=t.split("\n").length;return sh==="term"?32:sh==="dec"?n*15+34:n*15+18;};
   const layout=nodes=>{const arr=[];let y=topY;nodes.forEach(nd=>{const h=nh(nd[0],nd[1]);arr.push({text:nd[0],shape:nd[1],cy:y+h/2,h});y+=h+gap;});return{arr,bottom:y-gap};};
@@ -510,10 +545,10 @@ function calcCost(p,r){
   cx.appendChild(elh("p",{class:"note"},`합계 ${fmt(r.capex)}백만원. 특정 부품 등급을 올리면 해당 막대만 길어집니다.`));
   cx.appendChild(capexChart(r));p.appendChild(cx);
   // LCOH 분해
-  const lc=elh("div",{class:"panelcard"});lc.appendChild(elh("div",{class:"cardh"},"3. LCOH 원가분해 (연간총비용 ÷ 공급열량)"));
+  const lc=elh("div",{class:"panelcard"});lc.appendChild(elh("div",{class:"cardh"},"3. LCOH 원가분해 (할인: NPV비용 ÷ NPV에너지)"));
   lc.appendChild(lcohBar(r));
-  lc.appendChild(elh("p",{class:"note"},`연간총비용 ${fmt(r.annualCost)}백만원 = <b>O&M ${fmt(S.params.opexCash)}</b>(매년 반복되는 연간비, 60으로 나누지 않음) + <b>CAPEX/60 = ${fmt(r.capex/60)}</b>(자본비를 운영 60년에 균등 회수 — 문제지 공식) ${S.penalty?"+ <b>고장손실 "+fmt(r.loss)+"</b>":""}. ÷ 공급열량 ${fmt(r.supply/1e6)}백만kWh.`));
-  lc.appendChild(elh("p",{class:"note"},"⚠️ <b>건설비는 LCOH에선 /60</b>(운영수명 균등회수)이고, <b>현금흐름에선 /10</b>(실제 건설 10년 지출)입니다 — 둘은 목적이 다릅니다. LCOH의 O&M(24,462)은 나누는 게 아니라 매 해 그대로 드는 연간비입니다."));
+  lc.appendChild(elh("p",{class:"note"},`<b>할인 LCOH = NPV(총비용) ÷ NPV(총에너지)</b> — 미래의 비용·에너지를 모두 현재가치로 당겨 나눔. 자본비는 할인율로 연환산(capex×${E.capexFactor(S.params).toFixed(4)}), O&M ${fmt(S.params.opexCash)}은 매년 반복, ${S.penalty?"고장손실 "+fmt(r.loss)+" 포함":"페널티 OFF"}. 이 값은 <b>판매가와 직접 비교 가능한 손익분기 단가</b>에 가깝습니다(LCOH<판매가면 그 가격에서 대략 NPV>0).`));
+  lc.appendChild(elh("p",{class:"note"},"⚠️ 자본비 처리: <b>LCOH</b>는 건설비를 할인해 연환산(실질할인율 기준), <b>현금흐름</b>은 실제 건설 10년간 지출로 반영 — 목적이 다릅니다. O&M은 나누는 게 아니라 매 해 그대로 드는 연간비입니다."));
   lc.appendChild(elh("p",{class:"note"},"🔴 <b>페널티가 수식에 들어가는 법</b> — <b>ON</b>: 분자에 <b>고장손실(=정지일수×208백만원)</b>을 더하고, 분모 공급열량을 <b>×가동률</b>(=(365−정지일수)/365)로 줄임. <b>OFF</b>: 손실 0, 가동률 100%로 둠. 그래서 같은 설계라도 페널티 여부가 LCOH·IRR을 바꿉니다."));
   p.appendChild(lc);
 }
@@ -644,7 +679,7 @@ function finTable(r){
 function detailsBlock(r){
   const d=elh("details",{class:"panelcard"});d.appendChild(elh("summary",{},"계산 근거 (더보기) — 운영비 분해 · 고장확률 · 가격 산정"));
   const P=S.params;const supply1=P.annualHeat*1000;
-  let h=`<p class="note">LCOH = (연간 O&M + CAPEX/60 + 고장 페널티) / 실제 공급열량. <b>감가상각 4,077은 O&M(24,462)에서 제외</b>(CAPEX/60로 별도 계상, 이중계산 방지).</p>`;
+  let h=`<p class="note">LCOH = NPV(비용)/NPV(에너지) 할인 방식. <b>감가상각 4,077은 O&M(24,462)에서 제외</b>(자본비는 할인 연환산으로 별도 계상, 이중계산 방지).</p>`;
   h+="<h4>운영비(O&M) 분해 — 왜 O&M이 큰가</h4><table class='dt'><thead><tr><th>항목</th><th>백만원/년</th><th>원/kWh*</th></tr></thead><tbody>";
   [["인건·유지·보충재 등",9500],["핵연료",8000],["전력비",5212],["폐로비",800],["용수",700],["감속재",250]].forEach(x=>h+=`<tr><td>${x[0]}</td><td class='num'>${fmt(x[1])}</td><td class='num'>${(x[1]*1e6/supply1).toFixed(1)}</td></tr>`);
   h+=`<tr class='tot'><td>O&M 합계(감가상각 제외)</td><td class='num'>24,462</td><td class='num'>${(24462*1e6/supply1).toFixed(1)}</td></tr></tbody></table><p class="note">*가동률 1.0 기준. 핵연료+전력이 지배 → 100MWth·싼 열 구조에서 정상.</p>`;
@@ -673,7 +708,7 @@ function buildCSV(r){
   r.scen.forEach((p,i)=>push(p.id,p.name,E.SCEN[i][2].join(" | "),E.SCEN[i][3],p.freq,p.dose,p.allowed,p.pass?"합격":"불합격"));
   push("");push("[결과지표]");
   push("LCOH(원/kWh)",r.lcoh.toFixed(2));
-  push(" - 건설(CAPEX/60)",r.lcohCon.toFixed(2));push(" - O&M",r.lcohOm.toFixed(2));push(" - 고장페널티",r.lcohFp.toFixed(2));
+  push(" - 건설(할인 자본비)",r.lcohCon.toFixed(2));push(" - O&M",r.lcohOm.toFixed(2));push(" - 고장페널티",r.lcohFp.toFixed(2));
   push("CAPEX(백만원)",Math.round(r.capex));push("연간총비용(백만원)",Math.round(r.annualCost));
   push("등가가동률",r.avail.toFixed(4));push("기대정지일수(일/년)",r.downtime.toFixed(2));
   push("NPV(백만원)",Math.round(r.npv));push("IRR(%)",(r.irr*100).toFixed(2));
@@ -702,7 +737,7 @@ function exportCSV(r){
   const dl=elh("button",{class:"ghost"},"⬇ 파일 다운로드");
   dl.onclick=()=>{try{const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob);const a=elh("a",{href:url,download:"htgr_design.csv"});
-    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){alert("다운로드가 차단된 환경입니다. 복사를 이용하세요.");}};
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){toast("다운로드 차단 환경 — 복사를 이용하세요.");}};
   br.appendChild(dl);
   const cl=elh("button",{class:"ghost"},"닫기");cl.onclick=()=>ov.remove();br.appendChild(cl);
   card.appendChild(br);ov.appendChild(card);
@@ -796,23 +831,139 @@ function containChart(grades,xstar){
 }
 
 // ============ TAB 4: SCENARIOS (basic) ============
+function scState(sc){return {penalty:sc.penalty, params:sc.params||S.params};}
+const SR8_NAMES=["원자로압력용기","교차용기","중간열교환기","증기발생기","제어봉집합체","원자로공동냉각계통","계측제어전기계통","비상배터리"];
+const SR5_NAMES=["원자로압력용기","제어봉집합체","교차용기","원자로공동냉각계통","계측제어전기계통"];
+const DOCX6={"원자로압력용기":"SR","제어봉집합체":"SR","중간열교환기":"NSRST","헬륨순환기":"NST","교차용기":"SR","헬륨서비스계통":"NST","원자로공동냉각계통":"SR","정지냉각계통":"NSRST","급수펌프":"NST","증기발생기":"NST","계측제어전기계통":"SR","디젤발전기":"SR","비상배터리":"NSRST"};
+function mkScen(name,grades,x,penalty,license){return {name,grades:grades.slice(),x,penalty,license:license||"△",params:JSON.parse(JSON.stringify(S.params))};}
 function saveScenario(){
-  const r=result();const name=prompt("시나리오 이름:", (S.penalty?"페널티ON":"페널티OFF")+" · SR"+S.grades.filter(g=>g==="SR").length);
-  if(!name)return;
-  S.scenarios.push({name,grades:S.grades.slice(),x:S.x,penalty:S.penalty,
-    lcoh:r.lcoh,npv:r.npv,irr:r.irr,avail:r.avail,npass:r.npass,note:""});
-  save();alert("저장됨: "+name);
+  const def=(S.penalty?"페널티ON":"페널티OFF")+" · SR"+S.grades.filter(g=>g==="SR").length+"·NSRST"+S.grades.filter(g=>g==="NSRST").length;
+  uiPrompt("이 단계(이벤트)의 이름:",def,name=>{
+    S.scenarios.push(mkScen(name,S.grades,S.x,S.penalty,"△"));
+    save();
+    if(S.tab==="scen")render();else toast("저장됨: "+name);
+  });
+}
+function loadStory(kind){
+  const msg=kind==="cand"?"본선 5개 후보안(PPT)을":"예선 서사 3단계(all-NST→NSRST→SR5)를";
+  uiConfirm(msg+" 계산해 목록에 추가합니다. 최적화 실행으로 몇 초 걸립니다. 진행할까요?",()=>doLoadStory(kind));
+}
+function doLoadStory(kind){
+  const base=JSON.parse(JSON.stringify(S.params));
+  const opt=(locked,pen)=>E.makeOptimizer(locked,{penalty:pen,params:base}).runAll().best;
+  const lk=names=>{const o={};names.forEach(n=>o[CI[n]]="SR");return o;};
+  const add=[];const mk2=(name,g,x,pen,lic)=>({name,grades:g.slice(),x,penalty:pen,license:lic,params:JSON.parse(JSON.stringify(base))});
+  if(kind==="cand"){
+    const c1=opt({},false), c2=opt({},true), c4=opt(lk(SR8_NAMES),true), c5=opt(lk(SR5_NAMES),true);
+    const g3=C.map(c=>DOCX6[c[0]]); const x3=E.minContainX(g3,{penalty:true,params:base})||10;
+    if(c1)add.push(mk2("① SR없음·신뢰 미반영",c1.grades,c1.x,false,"✗"));
+    if(c2)add.push(mk2("② SR없음·신뢰 반영",c2.grades,c2.x,true,"✗"));
+    add.push(mk2("③ 문제 예시(docx §6)",g3,x3,true,"△"));
+    if(c4)add.push(mk2("④ 규제 SR 8개",c4.grades,c4.x,true,"O"));
+    if(c5)add.push(mk2("⑤ ★회피 SR 5개(채택)",c5.grades,c5.x,true,"O"));
+  }else{
+    const on=opt({},true), c5=opt(lk(SR5_NAMES),true);
+    add.push(mk2("all-NST 기준(문제)",E.allGrades("NST"),1,true,"✗"));
+    if(on)add.push(mk2("+ 고장 페널티 → NSRST",on.grades,on.x,true,"✗"));
+    if(c5)add.push(mk2("+ SR 5개 → 인허가 확보",c5.grades,c5.x,true,"O"));
+  }
+  S.scenarios.push(...add);save();render();
+}
+function scenChart(rows){
+  const W=680,H=250,m={l:48,r:16,t:20,b:64};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  const maxV=Math.max(S.params.heatPrice,...rows.map(r=>r.r.lcoh))*1.12;
+  const Y=v=>linmap(v,0,maxV,y0,y1);
+  for(let v=0;v<=maxV;v+=20){const gy=Y(v);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,class:"gl"},s);els("text",{x:x0-6,y:gy+3,"text-anchor":"end",class:"ax"},s).textContent=v;}
+  const g50=Y(S.params.heatPrice);els("line",{x1:x0,y1:g50,x2:x1,y2:g50,stroke:"var(--muted)","stroke-width":1.6},s);
+  els("text",{x:x1,y:g50-4,"text-anchor":"end",class:"ax",fill:"var(--muted)"},s).textContent="판매가 "+S.params.heatPrice;
+  const n=rows.length,bw=Math.min(60,(x1-x0)/n*0.6);const bestL=Math.min(...rows.map(r=>r.r.lcoh));
+  rows.forEach((row,i)=>{const cx=x0+(x1-x0)*(i+0.5)/n;const r=row.r;const safe=r.npass===11;
+    const col=!safe?"var(--fail)":(r.lcoh===bestL?"var(--pass)":"var(--accent)");
+    els("rect",{x:cx-bw/2,y:Y(r.lcoh),width:bw,height:y0-Y(r.lcoh),rx:3,fill:col,"fill-opacity":.85},s);
+    els("text",{x:cx,y:Y(r.lcoh)-5,"text-anchor":"middle",class:"dlabel"},s).textContent=r.lcoh.toFixed(1);
+    els("text",{x:cx,y:y0+14,"text-anchor":"middle",class:"ax",fill:"var(--ink2)"},s).textContent=(i+1);
+    // short label under
+    const nm=row.sc.name.replace(/^[①②③④⑤+\s]+/,"").slice(0,10);
+    els("text",{x:cx,y:y0+27,"text-anchor":"middle",class:"ax"},s).textContent=nm;});
+  // connecting line (progression)
+  els("path",{d:"M"+rows.map((row,i)=>{const cx=x0+(x1-x0)*(i+0.5)/n;return cx+","+Y(row.r.lcoh);}).join("L"),fill:"none",stroke:"var(--ink)","stroke-width":1.4,"stroke-dasharray":"4 3","stroke-opacity":.5},s);
+  els("text",{x:(x0+x1)/2,y:H-4,"text-anchor":"middle",class:"axl"},s).textContent="시나리오 순서 → (막대=LCOH, 빨강=안전탈락, 초록=최저)";
+  return s;
+}
+function minMargin(r){return Math.min.apply(null,r.scen.map(s=>s.margin));}
+function scenBars(rows,get,label,opt){
+  opt=opt||{};const W=680,H=210,m={l:52,r:16,t:16,b:60};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const vals=rows.map(get);
+  let maxV=Math.max(opt.thresh||0,...vals);if(!(maxV>0))maxV=1;maxV*=1.15;const minV=Math.min(0,...vals);
+  const Y=v=>linmap(v,minV,maxV,y0,y1);
+  for(let k=0;k<=4;k++){const v=minV+(maxV-minV)*k/4;const gy=Y(v);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,class:"gl"},s);
+    els("text",{x:x0-6,y:gy+3,"text-anchor":"end",class:"ax"},s).textContent=opt.axfmt?opt.axfmt(v):v.toFixed(0);}
+  if(opt.thresh!=null){const gy=Y(opt.thresh);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,stroke:"var(--muted)","stroke-width":1.5},s);
+    els("text",{x:x1,y:gy-4,"text-anchor":"end",class:"ax",fill:"var(--muted)"},s).textContent=opt.threshLabel||"";}
+  const n=rows.length,bw=Math.min(56,(x1-x0)/n*0.62),zero=Y(Math.max(0,minV));
+  rows.forEach((row,i)=>{const v=get(row);const cx=x0+(x1-x0)*(i+0.5)/n,yv=Y(v);
+    els("rect",{x:cx-bw/2,y:Math.min(yv,zero),width:bw,height:Math.max(1,Math.abs(yv-zero)),rx:3,fill:opt.color(row,v,vals),"fill-opacity":.85},s);
+    els("text",{x:cx,y:yv-5,"text-anchor":"middle",class:"dlabel"},s).textContent=opt.lab?opt.lab(v):v.toFixed(1);
+    els("text",{x:cx,y:y0+14,"text-anchor":"middle",class:"ax",fill:"var(--ink2)"},s).textContent=(i+1);
+    els("text",{x:cx,y:y0+28,"text-anchor":"middle",class:"ax"},s).textContent=row.sc.name.replace(/^[①②③④⑤★+\s]+/,"").slice(0,11);});
+  els("text",{x:(x0+x1)/2,y:H-4,"text-anchor":"middle",class:"axl"},s).textContent=label;
+  return s;
 }
 function renderScen(p){
-  p.appendChild(elh("div",{class:"note"},"※ 시나리오 탭은 기본 기능만 구현(저장/비교/삭제). 순서조정·철학분석은 추후."));
-  if(!S.scenarios.length){p.appendChild(elh("div",{class:"panelcard"},"저장된 시나리오가 없습니다. 대시보드/최적화에서 '기록'을 누르세요."));return;}
+  p.appendChild(elh("div",{class:"note"},"설계안을 <b>순서 있는 스토리</b>로 저장·비교합니다. 각 단계는 저장 당시의 등급·격납·페널티·옵션을 통째로 기억합니다. ▲▼ 순서 · ✎ 이름 · 인허가 칸 클릭으로 O/△/✗ 전환."));
+  const top=elh("div",{class:"btnrow"});
+  const sv=elh("button",{class:"primary"},"💾 현재 설계 저장");sv.onclick=()=>saveScenario();
+  const b1=elh("button",{class:"ghost"},"📖 예선 서사 3단계");b1.onclick=()=>loadStory("narr");
+  const b2=elh("button",{class:"ghost"},"🏆 본선 5 후보안(PPT)");b2.onclick=()=>loadStory("cand");
+  const clr=elh("button",{class:"ghost"},"🗑 전체 삭제");clr.onclick=()=>uiConfirm("모든 시나리오를 지울까요?",()=>{S.scenarios=[];save();render();});
+  [sv,b1,b2,clr].forEach(b=>top.appendChild(b));p.appendChild(top);
+  if(!S.scenarios.length){p.appendChild(elh("div",{class:"panelcard"},"저장된 시나리오가 없습니다. '현재 설계 저장'이나 위의 기본 스토리 버튼을 눌러보세요."));return;}
+  const rows=S.scenarios.map(sc=>({sc,r:E.compute(sc.grades,sc.x,scState(sc))}));
+  const bestL=Math.min(...rows.map(x=>x.r.lcoh)), bestI=Math.max(...rows.map(x=>x.r.irr));
+  // ---- 4축 비교표 (PPT Slide16) ----
   const wrap=elh("div",{class:"tblwrap panelcard"});
-  let h="<table class='dt'><thead><tr><th>이름</th><th>SR/NSRST/NST</th><th>x</th><th>LCOH</th><th>NPV</th><th>IRR</th><th>가동률</th><th>FC</th><th></th></tr></thead><tbody>";
-  S.scenarios.forEach((sc,i)=>{const c={SR:0,NSRST:0,NST:0};sc.grades.forEach(g=>c[g]++);
-    h+=`<tr><td>${sc.name}</td><td>${c.SR}/${c.NSRST}/${c.NST}</td><td class='num'>${sc.x.toFixed(2)}</td><td class='num'>${sc.lcoh.toFixed(1)}</td><td class='num'>${fmt(sc.npv)}</td><td class='num'>${(sc.irr*100).toFixed(2)}%</td><td class='num'>${(sc.avail*100).toFixed(1)}%</td><td>${sc.npass}/11</td><td><button class='mini' data-load='${i}'>불러오기</button> <button class='mini' data-del='${i}'>삭제</button></td></tr>`;});
-  h+="</tbody></table>";wrap.innerHTML=h;p.appendChild(wrap);
-  wrap.querySelectorAll("[data-load]").forEach(b=>b.onclick=()=>{const sc=S.scenarios[+b.dataset.load];S.grades=sc.grades.slice();S.x=sc.x;S.penalty=sc.penalty;S.tab="dash";render();});
-  wrap.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.scenarios.splice(+b.dataset.del,1);save();render();});
+  wrap.appendChild(elh("div",{class:"cardh"},"후보 비교 — 4축 (경제성·안전성·신뢰성·인허가성)"));
+  let h="<table class='dt'><thead><tr><th>#</th><th>이름</th><th>LCOH<br>(원/kWh)</th><th>IRR</th><th>안전</th><th>신뢰</th><th>인허가</th><th>SR/NSRST/NST</th><th>격납x</th><th>가동률</th><th>관리</th></tr></thead><tbody>";
+  rows.forEach(({sc,r},i)=>{const c={SR:0,NSRST:0,NST:0};sc.grades.forEach(g=>c[g]++);const safe=r.npass===11;
+    const lic=sc.license||"△";const licCol=lic==="O"?"var(--pass)":lic==="✗"?"var(--fail)":"var(--muted)";
+    h+=`<tr><td>${i+1}</td><td>${sc.name}</td>`
+      +`<td class='num' style='${r.lcoh===bestL?"font-weight:700;color:var(--pass)":""}'>${r.lcoh.toFixed(1)}</td>`
+      +`<td class='num' style='${r.irr===bestI?"font-weight:700;color:var(--pass)":""}'>${(r.irr*100).toFixed(2)}%</td>`
+      +`<td style='color:${safe?"var(--pass)":"var(--fail)"}'>${safe?"O":"✗"}</td>`
+      +`<td style='color:${sc.penalty?"var(--pass)":"var(--fail)"}'>${sc.penalty?"O":"✗"}</td>`
+      +`<td><button class='mini' data-lic='${i}' style='color:${licCol};font-weight:700'>${lic}</button></td>`
+      +`<td><span class='gtag g-SR'>${c.SR}</span> <span class='gtag g-NSRST'>${c.NSRST}</span> <span class='gtag g-NST'>${c.NST}</span></td>`
+      +`<td class='num'>${sc.x.toFixed(2)}</td><td class='num'>${(r.avail*100).toFixed(1)}%</td>`
+      +`<td style='white-space:nowrap'><button class='mini' data-up='${i}' ${i===0?"disabled":""}>▲</button><button class='mini' data-dn='${i}' ${i===rows.length-1?"disabled":""}>▼</button><button class='mini' data-rn='${i}'>✎</button><button class='mini' data-load='${i}'>불러오기</button><button class='mini' data-del='${i}'>✕</button></td></tr>`;});
+  h+="</tbody></table>";wrap.innerHTML+=h;p.appendChild(wrap);
+  p.appendChild(elh("div",{class:"note"},"안전=F-C 11/11 통과 · 신뢰=고장 페널티 반영 여부 · 인허가=규제상 SR 강제 대응(직접 판단, 칸 클릭으로 전환). 초록 굵은 값=최저 LCOH·최고 IRR."));
+  // ---- 진화 플롯 (경제성 LCOH·IRR + 안전여유) ----
+  const acc="var(--accent)",gp="var(--pass)",fl="var(--fail)",mut="var(--muted)";
+  const eco=elh("div",{class:"panelcard"});eco.appendChild(elh("div",{class:"cardh"},"경제성 진화 — LCOH · IRR (순서대로)"));
+  eco.appendChild(scenBars(rows,row=>row.r.lcoh,"LCOH (원/kWh) — 낮을수록 좋음",
+    {thresh:S.params.heatPrice,threshLabel:"판매가 "+S.params.heatPrice,lab:v=>v.toFixed(1),
+     color:(row,v,vals)=>row.r.npass<11?fl:(v===Math.min(...vals)?gp:acc)}));
+  eco.appendChild(scenBars(rows,row=>row.r.irr*100,"IRR (%) — 높을수록 좋음",
+    {thresh:S.params.disc*100,threshLabel:"할인율 "+(S.params.disc*100).toFixed(1)+"%",axfmt:v=>v.toFixed(0),lab:v=>v.toFixed(2),
+     color:(row,v,vals)=>v===Math.max(...vals)?gp:(v>=S.params.disc*100?acc:mut)}));
+  p.appendChild(eco);
+  const saf=elh("div",{class:"panelcard"});saf.appendChild(elh("div",{class:"cardh"},"안전성 진화 — 최소 안전여유"));
+  saf.appendChild(elh("p",{class:"note"},"5개 F-C 곡선을 겹쳐 그리는 대신, 각 안에서 <b>가장 아슬아슬한 사고가 허용선 대비 몇 배 여유</b>인지로 안전을 요약합니다. 1×=딱 통과, 높을수록 안전 마진 큼. (모두 11/11 통과라 O만으론 구분이 안 되므로)"));
+  saf.appendChild(scenBars(rows,row=>minMargin(row.r),"최소 안전여유 (× 배수) — 높을수록 안전",
+    {thresh:1,threshLabel:"합격선 1×",axfmt:v=>v.toFixed(1),lab:v=>"×"+v.toFixed(1),
+     color:(row,v,vals)=>v<1?fl:(v===Math.max(...vals)?gp:acc)}));
+  p.appendChild(saf);
+  // handlers
+  const $=s=>document.querySelectorAll(s);
+  const swap=(i,j)=>{const a=S.scenarios;[a[i],a[j]]=[a[j],a[i]];save();render();};
+  const cyc={"O":"△","△":"✗","✗":"O"};
+  $("[data-lic]").forEach(b=>b.onclick=()=>{const i=+b.dataset.lic;S.scenarios[i].license=cyc[S.scenarios[i].license||"△"];save();render();});
+  $("[data-up]").forEach(b=>b.onclick=()=>swap(+b.dataset.up,+b.dataset.up-1));
+  $("[data-dn]").forEach(b=>b.onclick=()=>swap(+b.dataset.dn,+b.dataset.dn+1));
+  $("[data-rn]").forEach(b=>b.onclick=()=>{const i=+b.dataset.rn;uiPrompt("새 이름:",S.scenarios[i].name,n=>{S.scenarios[i].name=n;save();render();});});
+  $("[data-del]").forEach(b=>b.onclick=()=>{S.scenarios.splice(+b.dataset.del,1);save();render();});
+  $("[data-load]").forEach(b=>b.onclick=()=>{const sc=S.scenarios[+b.dataset.load];S.grades=sc.grades.slice();S.x=sc.x;S.penalty=sc.penalty;if(sc.params)S.params=JSON.parse(JSON.stringify(sc.params));S.tab="dash";render();});
 }
 
 // ============ TAB 5: OPTIONS ============
@@ -850,6 +1001,9 @@ function renderOptions(p){
   c4.appendChild(mk("정지 1일 판매손실",P.lossDay,1,0,1000,v=>P.lossDay=v,"백만원/일","고장으로 열공급이 하루 멈출 때 못 판 매출. 연매출 39,420 ÷ 365 = 108."));
   c4.appendChild(mk("정지 1일 위약금",P.penDay,1,0,1000,v=>P.penDay=v,"백만원/일","공급 중단 시 계약상 하루당 물어주는 위약금(기본 100). 손실과 합쳐 정지 1일당 208."));
   p.appendChild(c4);
+  const c6=card("가동 가정");
+  c6.appendChild(mk("기본 이용률",P.baseCF,0.01,0,1,v=>P.baseCF=v,"(1.0 = 100%)","고장과 별개로, 정기 정비·재장전 등으로 매년 못 돌리는 몫을 반영. 예 0.95면 페널티 OFF라도 가동률 95%. <b>실제 가동률 = 기본 이용률 × (고장 반영 가동률)</b>. 기본 1.0(문제지 계약열량 가정)."));
+  p.appendChild(c6);
   const rst=elh("button",{class:"ghost"},"↺ 문제지 기본값 복원");
   rst.onclick=()=>{S.params=E.defaults();render();};p.appendChild(rst);
 }
