@@ -1021,10 +1021,10 @@ function renderScen(p){
   const sv=elh("button",{class:"primary"},"💾 대시보드 설계를 이벤트로 추가");sv.onclick=()=>saveEvent();
   const rnS=elh("button",{class:"ghost"},"✎ 시나리오 이름");rnS.onclick=()=>uiPrompt("시나리오 이름:",S.scenarios[S.activeScen].name,n=>{S.scenarios[S.activeScen].name=n;save();render();});
   const delS=elh("button",{class:"ghost"},"🗑 이 시나리오 삭제");delS.onclick=()=>uiConfirm("시나리오 '"+S.scenarios[S.activeScen].name+"'을(를) 삭제할까요?",()=>{S.scenarios.splice(S.activeScen,1);S.activeScen=0;save();render();});
-  const rst=elh("button",{class:"ghost"},"↺ 기본 시나리오 복원");rst.onclick=()=>uiConfirm("기본 시나리오(예선 서사·본선 5후보안)를 목록에 다시 추가할까요?",()=>{defaultScenarios().forEach(sc=>S.scenarios.push(sc));save();render();});
+  const rst=elh("button",{class:"ghost"},"↺ 초기화 (기본만)");rst.onclick=()=>uiConfirm("모든 시나리오를 지우고 기본(예선 서사·본선 5후보안)으로 초기화할까요? 내가 만든 시나리오·이벤트는 삭제됩니다.",()=>{S.scenarios=defaultScenarios();S.activeScen=0;save();render();});
   [sv,rnS,delS,rst].forEach(b=>top.appendChild(b));p.appendChild(top);
   const evs=activeEvents();
-  if(!evs.length){p.appendChild(elh("div",{class:"panelcard"},"이 시나리오엔 이벤트가 없습니다. 대시보드에서 설계를 만들어 '이벤트로 추가'를 누르세요. (지웠던 기본 시나리오는 '기본 시나리오 복원'으로 되돌릴 수 있습니다.)"));return;}
+  if(!evs.length){p.appendChild(elh("div",{class:"panelcard"},"이 시나리오엔 이벤트가 없습니다. 대시보드에서 설계를 만들어 '이벤트로 추가'를 누르세요. (기본 시나리오로 되돌리려면 '초기화'.)"));return;}
   const rows=evs.map(ev=>({sc:ev,r:E.compute(ev.grades,ev.x,scState(ev))}));
   const bestL=Math.min(...rows.map(x=>x.r.lcoh)), bestI=Math.max(...rows.map(x=>x.r.irr));
   // ---- 4축 비교표 (PPT Slide16) ----
