@@ -339,9 +339,12 @@ function defaultScenarios(){return [
     defEvent("all-NST 기준(문제)","NNNNNNNNNNNNN",1.0,true,"✗"),
     defEvent("+ 고장 페널티 → NSRST","RRRRRRRRRRRNR",1.6112,true,"✗"),
     defEvent("+ SR 5개 → 인허가 확보","SSRRSRSRRRSRN",1.0,true,"O")]},
+  {name:"내 시나리오", events:[]}, // 유저 작업용(기본 활성)
 ];}
-function freshState(){return{grades:Array(13).fill("NST"),locks:Array(13).fill(false),
-  x:1.0, penalty:true, params:E.defaults(), tab:"dash", calcSub:"cost", scenarios:load(), activeScen:0};}
+function myIdx(list){const i=list.findIndex(s=>s.name==="내 시나리오");return i<0?0:i;}
+function freshState(){const sc=load();
+  return{grades:Array(13).fill("NST"),locks:Array(13).fill(false),
+  x:1.0, penalty:true, params:E.defaults(), tab:"dash", calcSub:"cost", scenarios:sc, activeScen:myIdx(sc)};}
 let S=freshState();
 // 데이터 모델: 시나리오 = {name, events:[event,...]}, event = {name,grades,x,penalty,params,license}
 function load(){try{const raw=localStorage.getItem("htgr_scen");
@@ -1021,7 +1024,7 @@ function renderScen(p){
   const sv=elh("button",{class:"primary"},"💾 대시보드 설계를 이벤트로 추가");sv.onclick=()=>saveEvent();
   const rnS=elh("button",{class:"ghost"},"✎ 시나리오 이름");rnS.onclick=()=>uiPrompt("시나리오 이름:",S.scenarios[S.activeScen].name,n=>{S.scenarios[S.activeScen].name=n;save();render();});
   const delS=elh("button",{class:"ghost"},"🗑 이 시나리오 삭제");delS.onclick=()=>uiConfirm("시나리오 '"+S.scenarios[S.activeScen].name+"'을(를) 삭제할까요?",()=>{S.scenarios.splice(S.activeScen,1);S.activeScen=0;save();render();});
-  const rst=elh("button",{class:"ghost"},"↺ 초기화 (기본만)");rst.onclick=()=>uiConfirm("모든 시나리오를 지우고 기본(예선 서사·본선 5후보안)으로 초기화할까요? 내가 만든 시나리오·이벤트는 삭제됩니다.",()=>{S.scenarios=defaultScenarios();S.activeScen=0;save();render();});
+  const rst=elh("button",{class:"ghost"},"↺ 초기화 (기본만)");rst.onclick=()=>uiConfirm("모든 시나리오를 지우고 기본(본선 5후보안·예선 서사 + 빈 '내 시나리오')으로 초기화할까요? 내가 만든 것은 삭제됩니다.",()=>{S.scenarios=defaultScenarios();S.activeScen=myIdx(S.scenarios);save();render();});
   [sv,rnS,delS,rst].forEach(b=>top.appendChild(b));p.appendChild(top);
   const evs=activeEvents();
   if(!evs.length){p.appendChild(elh("div",{class:"panelcard"},"이 시나리오엔 이벤트가 없습니다. 대시보드에서 설계를 만들어 '이벤트로 추가'를 누르세요. (기본 시나리오로 되돌리려면 '초기화'.)"));return;}
