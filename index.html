@@ -328,7 +328,7 @@ function freshState(){return{grades:Array(13).fill("NST"),locks:Array(13).fill(f
   x:1.0, penalty:true, params:E.defaults(), tab:"dash", calcSub:"cost", scenarios:load()};}
 let S=freshState();
 function load(){try{return JSON.parse(localStorage.getItem("htgr_scen")||"[]");}catch(e){return[];}}
-function save(){localStorage.setItem("htgr_scen",JSON.stringify(S.scenarios));}
+function save(){try{localStorage.setItem("htgr_scen",JSON.stringify(S.scenarios));}catch(e){/* 샌드박스 등 저장 차단 시 무시(세션 내 메모리 유지) */}}
 function opt(){return{penalty:S.penalty,params:S.params};}
 function result(){return E.compute(S.grades,S.x,opt());}
 
@@ -892,6 +892,64 @@ function scenChart(rows){
   return s;
 }
 function minMargin(r){return Math.min.apply(null,r.scen.map(s=>s.margin));}
+// 시나리오 LCOH 원가분해 스택 막대
+function scenStackLCOH(rows){
+  const W=680,H=250,m={l:48,r:132,t:16,b:60};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;
+  const maxV=Math.max(S.params.heatPrice,...rows.map(r=>r.r.lcoh))*1.14;const Y=v=>linmap(v,0,maxV,y0,y1);
+  for(let v=0;v<=maxV;v+=20){const gy=Y(v);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,class:"gl"},s);els("text",{x:x0-6,y:gy+3,"text-anchor":"end",class:"ax"},s).textContent=v;}
+  const g50=Y(S.params.heatPrice);els("line",{x1:x0,y1:g50,x2:x1,y2:g50,stroke:"var(--muted)","stroke-width":1.6},s);
+  els("text",{x:x1,y:g50-4,"text-anchor":"end",class:"ax",fill:"var(--muted)"},s).textContent="판매가 "+S.params.heatPrice;
+  const n=rows.length,bw=Math.min(56,(x1-x0)/n*0.6),bestL=Math.min(...rows.map(r=>r.r.lcoh));
+  const cols=[["lcohCon","--c-con"],["lcohOm","--c-om"],["lcohFp","--c-fp"]];
+  rows.forEach((row,i)=>{const cx=x0+(x1-x0)*(i+0.5)/n;let acc=0;
+    cols.forEach(([k,c])=>{const seg=row.r[k];if(seg<=0)return;const yT=Y(acc+seg),yB=Y(acc);els("rect",{x:cx-bw/2,y:yT,width:bw,height:Math.max(0,yB-yT-1),fill:`var(${c})`},s);acc+=seg;});
+    els("text",{x:cx,y:Y(acc)-5,"text-anchor":"middle",class:"dlabel",fill:row.r.lcoh===bestL?"var(--pass)":"var(--ink)"},s).textContent=row.r.lcoh.toFixed(1);
+    els("text",{x:cx,y:y0+14,"text-anchor":"middle",class:"ax",fill:"var(--ink2)"},s).textContent=(i+1);
+    els("text",{x:cx,y:y0+28,"text-anchor":"middle",class:"ax"},s).textContent=row.sc.name.replace(/^[①②③④⑤★+\s]+/,"").slice(0,10);});
+  [["건설","--c-con"],["O&M","--c-om"],["고장페널티","--c-fp"]].forEach((L,i)=>{els("rect",{x:x1+10,y:y1+i*20,width:12,height:12,rx:2,fill:`var(${L[1]})`},s);els("text",{x:x1+26,y:y1+10+i*20,class:"ax",fill:"var(--ink2)"},s).textContent=L[0];});
+  els("text",{x:(x0+x1)/2,y:H-4,"text-anchor":"middle",class:"axl"},s).textContent="시나리오 순서 → LCOH 원가분해 (원/kWh)";
+  return s;
+}
+// 시나리오 IRR 점+선
+function scenLine(rows,get,label,opt){
+  opt=opt||{};const W=680,H=200,m={l:52,r:16,t:16,b:58};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const vals=rows.map(get);
+  const lo=Math.min(opt.thresh!=null?opt.thresh:Infinity,...vals),hi=Math.max(opt.thresh!=null?opt.thresh:-Infinity,...vals);
+  const pad=(hi-lo)*0.15||1;const Y=v=>linmap(v,lo-pad,hi+pad,y0,y1);
+  for(let k=0;k<=4;k++){const v=lo-pad+((hi+pad)-(lo-pad))*k/4;const gy=Y(v);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,class:"gl"},s);els("text",{x:x0-6,y:gy+3,"text-anchor":"end",class:"ax"},s).textContent=v.toFixed(1);}
+  if(opt.thresh!=null){const gy=Y(opt.thresh);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,stroke:"var(--muted)","stroke-width":1.5},s);els("text",{x:x1,y:gy-4,"text-anchor":"end",class:"ax",fill:"var(--muted)"},s).textContent=opt.threshLabel||"";}
+  const n=rows.length,cx=i=>x0+(x1-x0)*(i+0.5)/n;
+  els("path",{d:"M"+rows.map((row,i)=>cx(i)+","+Y(get(row))).join("L"),fill:"none",stroke:"var(--accent)","stroke-width":2},s);
+  const bi=vals.indexOf(Math.max(...vals));
+  rows.forEach((row,i)=>{const v=get(row);els("circle",{cx:cx(i),cy:Y(v),r:i===bi?6:5,fill:i===bi?"var(--pass)":"var(--accent)",stroke:"var(--surface)","stroke-width":1.5},s);
+    els("text",{x:cx(i),y:Y(v)-9,"text-anchor":"middle",class:"dlabel"},s).textContent=v.toFixed(2);
+    els("text",{x:cx(i),y:y0+14,"text-anchor":"middle",class:"ax",fill:"var(--ink2)"},s).textContent=(i+1);
+    els("text",{x:cx(i),y:y0+28,"text-anchor":"middle",class:"ax"},s).textContent=row.sc.name.replace(/^[①②③④⑤★+\s]+/,"").slice(0,10);});
+  els("text",{x:(x0+x1)/2,y:H-4,"text-anchor":"middle",class:"axl"},s).textContent=label;
+  return s;
+}
+// 소형 F-C (비교용)
+function fcMini(r){
+  const W=150,H=150,p=7;const s=svg(W,H);const x0=p,x1=W-p,y0=H-p,y1=p;
+  const X=v=>logmap(Math.max(1e-3,Math.min(1e3,v)),1e-3,1e3,x0,x1);
+  const Y=v=>logmap(Math.max(1e-7,Math.min(1e1,v)),1e-7,1e1,y0,y1);
+  els("rect",{x:x0,y:y1,width:x1-x0,height:y0-y1,fill:"none",stroke:"var(--grid)","stroke-width":1},s);
+  let pts=[];for(let lf=1;lf>=-6.3;lf-=0.12){const f=Math.pow(10,lf);let d=E.fcDose(f);if(!isFinite(d)||d>1e3)d=1e3;if(d<1e-3)d=1e-3;pts.push([X(d),Y(f)]);}
+  els("polygon",{points:pts.map(q=>q[0].toFixed(1)+","+q[1].toFixed(1)).join(" ")+` ${x0},${y0} ${x0},${y1}`,fill:"var(--pass)","fill-opacity":.06},s);
+  els("path",{d:"M"+pts.map(q=>q[0].toFixed(1)+","+q[1].toFixed(1)).join("L"),fill:"none",stroke:"var(--muted)","stroke-width":1.3},s);
+  r.scen.forEach(q=>els("circle",{cx:X(q.dose),cy:Y(q.freq),r:3,fill:q.pass?"var(--pass)":"var(--fail)"},s));
+  return s;
+}
+function scenFCrow(rows){
+  const box=elh("div",{style:"display:flex;gap:12px;overflow-x:auto;padding-bottom:6px"});
+  rows.forEach((row,i)=>{const cell=elh("div",{style:"flex:0 0 auto;text-align:center"});
+    cell.appendChild(fcMini(row.r));
+    const cap=elh("div",{class:"ax",style:"margin-top:3px;color:var(--ink2);max-width:150px"});
+    cap.innerHTML=`<b>${i+1}.</b> ${row.sc.name.replace(/^[①②③④⑤★+\s]+/,"").slice(0,11)}<br><span style="color:${row.r.npass===11?'var(--pass)':'var(--fail)'}">${row.r.npass}/11</span>`;
+    cell.appendChild(cap);box.appendChild(cell);});
+  return box;
+}
 function scenBars(rows,get,label,opt){
   opt=opt||{};const W=680,H=210,m={l:52,r:16,t:16,b:60};const s=svg(W,H);
   const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const vals=rows.map(get);
@@ -940,19 +998,15 @@ function renderScen(p){
   p.appendChild(elh("div",{class:"note"},"안전=F-C 11/11 통과 · 신뢰=고장 페널티 반영 여부 · 인허가=규제상 SR 강제 대응(직접 판단, 칸 클릭으로 전환). 초록 굵은 값=최저 LCOH·최고 IRR."));
   // ---- 진화 플롯 (경제성 LCOH·IRR + 안전여유) ----
   const acc="var(--accent)",gp="var(--pass)",fl="var(--fail)",mut="var(--muted)";
-  const eco=elh("div",{class:"panelcard"});eco.appendChild(elh("div",{class:"cardh"},"경제성 진화 — LCOH · IRR (순서대로)"));
-  eco.appendChild(scenBars(rows,row=>row.r.lcoh,"LCOH (원/kWh) — 낮을수록 좋음",
-    {thresh:S.params.heatPrice,threshLabel:"판매가 "+S.params.heatPrice,lab:v=>v.toFixed(1),
-     color:(row,v,vals)=>row.r.npass<11?fl:(v===Math.min(...vals)?gp:acc)}));
-  eco.appendChild(scenBars(rows,row=>row.r.irr*100,"IRR (%) — 높을수록 좋음",
-    {thresh:S.params.disc*100,threshLabel:"할인율 "+(S.params.disc*100).toFixed(1)+"%",axfmt:v=>v.toFixed(0),lab:v=>v.toFixed(2),
-     color:(row,v,vals)=>v===Math.max(...vals)?gp:(v>=S.params.disc*100?acc:mut)}));
+  const eco=elh("div",{class:"panelcard"});eco.appendChild(elh("div",{class:"cardh"},"경제성 진화 (순서대로)"));
+  eco.appendChild(elh("p",{class:"note"},"LCOH는 원가분해(건설·O&M·고장페널티) 스택으로, IRR은 점을 선으로 이어 추세를 봅니다."));
+  eco.appendChild(scenStackLCOH(rows));
+  eco.appendChild(scenLine(rows,row=>row.r.irr*100,"IRR (%) — 점·선, 높을수록 좋음",
+    {thresh:S.params.disc*100,threshLabel:"할인율 "+(S.params.disc*100).toFixed(1)+"%"}));
   p.appendChild(eco);
-  const saf=elh("div",{class:"panelcard"});saf.appendChild(elh("div",{class:"cardh"},"안전성 진화 — 최소 안전여유"));
-  saf.appendChild(elh("p",{class:"note"},"5개 F-C 곡선을 겹쳐 그리는 대신, 각 안에서 <b>가장 아슬아슬한 사고가 허용선 대비 몇 배 여유</b>인지로 안전을 요약합니다. 1×=딱 통과, 높을수록 안전 마진 큼. (모두 11/11 통과라 O만으론 구분이 안 되므로)"));
-  saf.appendChild(scenBars(rows,row=>minMargin(row.r),"최소 안전여유 (× 배수) — 높을수록 안전",
-    {thresh:1,threshLabel:"합격선 1×",axfmt:v=>v.toFixed(1),lab:v=>"×"+v.toFixed(1),
-     color:(row,v,vals)=>v<1?fl:(v===Math.max(...vals)?gp:acc)}));
+  const saf=elh("div",{class:"panelcard"});saf.appendChild(elh("div",{class:"cardh"},"안전성 진화 — F-C 커브 나란히 비교"));
+  saf.appendChild(elh("p",{class:"note"},"각 시나리오의 F-C를 가로로 나열해 한눈에 비교합니다. 점이 모두 곡선 아래(초록)면 통과. 좌우로 스크롤."));
+  saf.appendChild(scenFCrow(rows));
   p.appendChild(saf);
   // handlers
   const $=s=>document.querySelectorAll(s);
