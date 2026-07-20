@@ -329,6 +329,7 @@ function uiConfirm(msg,cb){uiModal((card,close)=>{
 function decodeG(str){const m={S:"SR",R:"NSRST",N:"NST"};return str.split("").map(c=>m[c]);}
 function defEvent(name,gstr,x,pen,lic){return {name,grades:decodeG(gstr),x,penalty:pen,license:lic,params:E.defaults()};}
 function defaultScenarios(){return [
+  {name:"내 시나리오", events:[]}, // 유저 작업용(맨 왼쪽·기본 활성)
   {name:"본선 5 후보안", events:[
     defEvent("① SR없음·신뢰 미반영","RNNNRNNRNNRNR",1.6112,false,"✗"),
     defEvent("② SR없음·신뢰 반영","RRRRRRRRRRRNR",1.6112,true,"✗"),
@@ -339,7 +340,6 @@ function defaultScenarios(){return [
     defEvent("all-NST 기준(문제)","NNNNNNNNNNNNN",1.0,true,"✗"),
     defEvent("+ 고장 페널티 → NSRST","RRRRRRRRRRRNR",1.6112,true,"✗"),
     defEvent("+ SR 5개 → 인허가 확보","SSRRSRSRRRSRN",1.0,true,"O")]},
-  {name:"내 시나리오", events:[]}, // 유저 작업용(기본 활성)
 ];}
 function myIdx(list){const i=list.findIndex(s=>s.name==="내 시나리오");return i<0?0:i;}
 function freshState(){const sc=load();
@@ -926,6 +926,48 @@ function scenChart(rows){
   return s;
 }
 function minMargin(r){return Math.min.apply(null,r.scen.map(s=>s.margin));}
+// ---- 시나리오 해설(철학) : 기본은 큐레이션, 커스텀은 수치 기반 자동 생성 ----
+const CAND_ANALYSIS=`<p><b>핵심 철학: "안전은 통과 게이트, 비용이 목적. 그러나 규제를 못 넘으면 paper reactor다."</b></p>
+<ul style="font-size:13px;line-height:1.8">
+<li><b>①→② (규제 무시)</b>: 순수 경제 최적은 <b>NSRST 중심, SR 0개</b>. NSRST는 2배 지출로 고장빈도 10⁻³ 저감이고, 방출선량 큰 사고는 부품이 <b>AND로 묶여 곱연산(10⁻³×10⁻³)</b>이라 F-C 아래로 충분히 내려감. 신뢰도 페널티를 켜도(②) 몇 부품이 NST→NSRST로 자발 승급할 뿐, SR은 여전히 불필요.</li>
+<li><b>왜 SR이 안 나오나</b>: SR 전환비용(건설비 ×2.5~) ≫ 신뢰도 이득(이미 10⁻³라 절감폭 미미). 경제적으론 SR이 손해.</li>
+<li><b>③→④ (규제 개입)</b>: 인허가가 최종 관문. 규제상 SR 강제 8개(RPV·교차용기·IHX·SG·제어봉·RCCS·RPS·배터리)를 반영하면 비용 상승.</li>
+<li><b>⑤ 채택</b>: 실제 승인 선례(Kairos·Xe-100·NuScale·HTR-PM)로 <b>3개(IHX·SG·배터리)를 NSRST로 회피</b> → SR 5개. 4축(경제·안전·신뢰·인허가) 모두 O이면서 인허가 안들 중 <b>LCOH 최저</b>. "규제는 바닥을 깔고, 경제성이 기준을 올린다."</li>
+</ul>`;
+const NARR_ANALYSIS=`<p><b>핵심 철학: "고장을 비용에 내재화하면 등급이 스스로 오른다."</b></p>
+<ul style="font-size:13px;line-height:1.8">
+<li><b>all-NST</b>: 건설비만 보면 제일 싸 보이지만, 잦은 고장(정지 71일/년)으로 <b>열공급 손실</b>이 원가를 폭등시켜 자멸.</li>
+<li><b>+ 고장 페널티</b>: 손실을 원가에 넣자 핵심 부품이 <b>강제가 아니라 경제적으로</b> NSRST로 승급 → LCOH 회복.</li>
+<li><b>+ SR 5개</b>: 규제 인허가를 위해 필요한 최소 SR만 고정. 예선의 "NSRST가 답, SR은 보험료" 논지를 본선 규제로 확장.</li>
+</ul>`;
+function analyzeScenario(sc){
+  const evs=sc.events||[];
+  if(!evs.length)return "<p>이 시나리오엔 이벤트가 없습니다. 대시보드에서 설계를 만들어 이벤트로 추가한 뒤 다시 눌러보세요.</p>";
+  if(sc.name==="본선 5 후보안")return CAND_ANALYSIS;
+  if(sc.name==="예선 서사")return NARR_ANALYSIS;
+  const rows=evs.map(ev=>({ev,r:E.compute(ev.grades,ev.x,{penalty:ev.penalty,params:ev.params||S.params})}));
+  const f=rows[0].r,l=rows[rows.length-1].r,d=l.lcoh-f.lcoh;
+  const srAvg=(rows.reduce((a,x)=>a+x.ev.grades.filter(g=>g==="SR").length,0)/rows.length);
+  const nsAvg=(rows.reduce((a,x)=>a+x.ev.grades.filter(g=>g==="NSRST").length,0)/rows.length);
+  const allSafe=rows.every(x=>x.r.npass===11);
+  const bestL=rows.reduce((a,b)=>b.r.lcoh<a.r.lcoh?b:a);
+  const bestI=rows.reduce((a,b)=>b.r.irr>a.r.irr?b:a);
+  const penOn=rows.some(x=>x.ev.penalty);
+  let h=`<p><b>${sc.name}</b> — 이벤트 ${evs.length}개의 자동 해설:</p><ul style="font-size:13px;line-height:1.8">`;
+  h+=`<li><b>원가 흐름</b>: LCOH ${f.lcoh.toFixed(1)} → ${l.lcoh.toFixed(1)}원 (${d>0.1?"상승 +"+d.toFixed(1):d<-0.1?"하락 "+d.toFixed(1):"거의 동일"}). 최저는 <b>'${bestL.ev.name}'</b> ${bestL.r.lcoh.toFixed(1)}원.</li>`;
+  h+=`<li><b>등급 철학</b>: 평균 SR ${srAvg.toFixed(1)}개·NSRST ${nsAvg.toFixed(1)}개 → ${srAvg<0.5?"SR을 거의 안 써 비용 억제형(NSRST 중심)":srAvg>4?"SR을 많이 써 규제·보수성 우선형":"필요한 곳에만 SR 선별 적용형"}.</li>`;
+  h+=`<li><b>안전</b>: ${allSafe?"모든 이벤트 F-C 11/11 통과":"일부 이벤트가 안전선 초과 — 격납 배수↑ 또는 등급 상향 필요"}. 신뢰도 페널티 ${penOn?"반영":"미반영"}.</li>`;
+  h+=`<li><b>투자</b>: 최고 IRR <b>'${bestI.ev.name}'</b> ${(bestI.r.irr*100).toFixed(2)}% (할인율 ${(S.params.disc*100).toFixed(1)}% ${bestI.r.irr>=S.params.disc?"초과 → 투자가치 있음":"미달"}).</li>`;
+  h+=`</ul><p class="note">※ 커스텀 시나리오라 수치에서 규칙 기반으로 자동 생성한 해설입니다.</p>`;
+  return h;
+}
+function showInfo(title,html){
+  const ov=elh("div",{class:"modal"});const card=elh("div",{class:"modalcard"});
+  card.appendChild(elh("div",{class:"cardh"},title));
+  const body=elh("div",{style:"overflow-y:auto"});body.innerHTML=html;card.appendChild(body);
+  const br=elh("div",{class:"btnrow"});const cl=elh("button",{class:"primary"},"닫기");cl.onclick=()=>ov.remove();br.appendChild(cl);card.appendChild(br);
+  ov.appendChild(card);ov.onclick=e=>{if(e.target===ov)ov.remove();};document.body.appendChild(ov);
+}
 // x축 제목: 길면 공백 기준 2줄로 (겹침 방지)
 function axTitle(s,cx,H,text){
   if(text.length<=28){els("text",{x:cx,y:H-5,"text-anchor":"middle",class:"axl"},s).textContent=text;return;}
@@ -1025,7 +1067,8 @@ function renderScen(p){
   const rnS=elh("button",{class:"ghost"},"✎ 시나리오 이름");rnS.onclick=()=>uiPrompt("시나리오 이름:",S.scenarios[S.activeScen].name,n=>{S.scenarios[S.activeScen].name=n;save();render();});
   const delS=elh("button",{class:"ghost"},"🗑 이 시나리오 삭제");delS.onclick=()=>uiConfirm("시나리오 '"+S.scenarios[S.activeScen].name+"'을(를) 삭제할까요?",()=>{S.scenarios.splice(S.activeScen,1);S.activeScen=0;save();render();});
   const rst=elh("button",{class:"ghost"},"↺ 초기화 (기본만)");rst.onclick=()=>uiConfirm("모든 시나리오를 지우고 기본(본선 5후보안·예선 서사 + 빈 '내 시나리오')으로 초기화할까요? 내가 만든 것은 삭제됩니다.",()=>{S.scenarios=defaultScenarios();S.activeScen=myIdx(S.scenarios);save();render();});
-  [sv,rnS,delS,rst].forEach(b=>top.appendChild(b));p.appendChild(top);
+  const ana=elh("button",{class:"ghost"},"🔍 이 시나리오 해설");ana.onclick=()=>showInfo("["+S.scenarios[S.activeScen].name+"] 해설 — 어떤 철학인가",analyzeScenario(S.scenarios[S.activeScen]));
+  [sv,ana,rnS,delS,rst].forEach(b=>top.appendChild(b));p.appendChild(top);
   const evs=activeEvents();
   if(!evs.length){p.appendChild(elh("div",{class:"panelcard"},"이 시나리오엔 이벤트가 없습니다. 대시보드에서 설계를 만들어 '이벤트로 추가'를 누르세요. (기본 시나리오로 되돌리려면 '초기화'.)"));return;}
   const rows=evs.map(ev=>({sc:ev,r:E.compute(ev.grades,ev.x,scState(ev))}));
