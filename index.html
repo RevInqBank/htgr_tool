@@ -123,6 +123,9 @@ h4{font-size:13px}
 .imx td:first-child,.imx th:first-child{text-align:left;white-space:nowrap;color:var(--ink2)}
 .imx .gtag{padding:1px 6px;min-width:16px}
 .chcap{font-size:12.5px;color:var(--ink2);margin:14px 0 6px;line-height:1.55}
+.chpair{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px}
+.chhalf{flex:1;min-width:300px}
+.chsub{font-size:13px;font-weight:600;color:var(--ink);margin:2px 0 4px}
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:300;background:var(--accent);color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);transition:opacity .35s}
 </style>
 <div class="top"><h1>🔥 HTGR 최적설계 툴</h1><div id="nav"></div>
@@ -607,7 +610,18 @@ function calcInvest(p,r){
   const nc=elh("div",{class:"panelcard"});nc.appendChild(elh("div",{class:"cardh"},"누적현금흐름 (10년 건설 + 60년 운영)"));
   nc.appendChild(elh("p",{class:"note"},"건설기(1~10년): CAPEX를 <b>1/10씩</b> 지출(음). 운영기(11~70년): 매년 (열매출 − O&M − 위약금)에 상승률을 복리 적용해 수령(양). 누적선이 0을 넘는 해가 회수 시점, NPV는 이를 할인율로 현재가치화."));
   nc.appendChild(elh("p",{class:"note"},"※ <b>현금흐름의 페널티 처리</b>: 열매출은 이미 가동률만큼 줄어(못 판 열=판매손실 반영) 있으므로, 현금흐름엔 <b>위약금(100/일)만</b> 추가로 뺍니다 — 판매손실을 이중으로 세지 않기 위함. 반면 <b>LCOH</b>는 문제지 정의를 따라 분자에 <b>208/일(판매손실+위약금)</b>을 넣습니다(공식 지표라 그대로 준수). 두 안 모두 이 설계가 양호하므로 결론은 일치."));
-  nc.appendChild(npvChart(r));p.appendChild(nc);
+  const pair=elh("div",{class:"chpair"});
+  const left=elh("div",{class:"chhalf"});
+  left.appendChild(elh("div",{class:"chsub"},"① 명목 누적 (할인 안 함)"));
+  left.appendChild(npvChart(r));
+  left.appendChild(elh("p",{class:"note"},"실제로 오간 돈을 그냥 합산. 끝점 <b>"+fmt(r.flows[r.flows.length-1][2])+"</b>백만원"+(r.payback?", 회수 <b>"+r.payback+"년</b>":", 미회수")+". 시간가치를 안 봄."));
+  const right=elh("div",{class:"chhalf"});
+  right.appendChild(elh("div",{class:"chsub"},"② 할인 누적 (할인율 "+(S.params.disc*100).toFixed(1)+"%)"));
+  right.appendChild(npvDiscChart(r));
+  right.appendChild(elh("p",{class:"note"},"매년 현금을 현재가치로 깎아 합산 → 끝점이 곧 <b style='color:"+(r.npv>=0?"var(--pass)":"var(--fail)")+"'>NPV "+fmt(r.npv)+"</b>백만원. 먼 미래 매출이 크게 할인돼 명목보다 훨씬 작아짐."));
+  pair.appendChild(left);pair.appendChild(right);nc.appendChild(pair);
+  nc.appendChild(elh("p",{class:"note"},"👉 두 그래프의 <b>끝점 차이</b>가 곧 할인이 갉아먹은 시간가치. 명목이 양수여도 할인 후(NPV)가 음수면 요구수익률(할인율)을 못 넘긴 것 — IRR "+(r.irr*100).toFixed(2)+"% vs 할인율 "+(S.params.disc*100).toFixed(1)+"%."));
+  p.appendChild(nc);
   p.appendChild(finTable(r));
 }
 function calcAdv(p,r){
@@ -701,6 +715,33 @@ function npvChart(r){
   if(r.payback){els("circle",{cx:X(r.payback),cy:zero,r:5,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2},s);
     els("text",{x:X(r.payback)+7,y:zero-7,class:"dlabel"},s).textContent="회수 "+r.payback+"년";}
   axTitle(s,(x0+x1)/2,H,"사업연도 (막대=순현금, 선=누적, 백만원)");
+  return s;
+}
+// 할인 적용 누적 그래프: 매년 현금흐름을 할인해 누적 → 끝점이 곧 NPV.
+function npvDiscChart(r){
+  const W=560,H=268,m={l:60,r:16,t:16,b:42};const s=svg(W,H);
+  const x0=m.l,x1=W-m.r,y0=H-m.b,y1=m.t;const NY=r.flows.length;const disc=S.params.disc;
+  // 할인 현금흐름과 누적(=진행 NPV)
+  const dcf=r.flows.map(f=>f[1]/Math.pow(1+disc,f[0]));
+  const dcum=[];let acc=0;for(let i=0;i<dcf.length;i++){acc+=dcf[i];dcum.push(acc);}
+  const cmin=Math.min(0,...dcum),cmax=Math.max(0,...dcum);
+  const X=v=>linmap(v,0,NY,x0,x1),Y=v=>linmap(v,cmin,cmax,y0,y1);const zero=Y(0);
+  for(let i=0;i<=4;i++){const v=cmin+(cmax-cmin)*i/4;const gy=Y(v);els("line",{x1:x0,y1:gy,x2:x1,y2:gy,class:"gl"},s);
+    els("text",{x:x0-6,y:gy+3,"text-anchor":"end",class:"ax"},s).textContent=(v/1000).toFixed(0)+"k";}
+  els("line",{x1:x0,y1:zero,x2:x1,y2:zero,class:"baseline"},s);
+  for(let yr=0;yr<=NY;yr+=10){els("text",{x:X(yr),y:y0+14,"text-anchor":"middle",class:"ax"},s).textContent=yr;}
+  const bw=(X(1)-X(0))*0.7;
+  r.flows.forEach((f,i)=>{const cf=dcf[i];const yv=Y(cf*8);els("rect",{x:X(f[0])-bw/2,y:Math.min(yv,zero),width:bw,height:Math.abs(yv-zero),fill:cf>=0?"var(--cf-pos)":"var(--cf-neg)","fill-opacity":.5},s);});
+  els("path",{d:"M"+r.flows.map((f,i)=>X(f[0]).toFixed(1)+","+Y(dcum[i]).toFixed(1)).join("L"),fill:"none",stroke:"var(--accent)","stroke-width":2},s);
+  // 끝점 = NPV
+  const ex=X(NY),ey=Y(dcum[dcum.length-1]);
+  els("circle",{cx:ex,cy:ey,r:5,fill:"var(--surface)",stroke:"var(--accent)","stroke-width":2},s);
+  els("text",{x:ex-4,y:ey+(r.npv>=0?-9:16),"text-anchor":"end",class:"dlabel",fill:r.npv>=0?"var(--pass)":"var(--fail)"},s).textContent="NPV "+fmt(r.npv);
+  // 할인 회수(누적 현재가치가 0 상향돌파하는 해)
+  let dpb=null;for(let i=0;i<dcum.length;i++){if(r.flows[i][0]>S.params.constrYears&&dcum[i]>=0){dpb=r.flows[i][0];break;}}
+  if(dpb){els("circle",{cx:X(dpb),cy:zero,r:4,fill:"var(--surface)",stroke:"var(--accent)","stroke-width":1.6},s);
+    els("text",{x:X(dpb)+6,y:zero-6,class:"dlabel"},s).textContent="할인회수 "+dpb+"년";}
+  axTitle(s,(x0+x1)/2,H,"사업연도 (선=누적 현재가치=NPV, 백만원)");
   return s;
 }
 function finTable(r){
